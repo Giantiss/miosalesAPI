@@ -2,96 +2,79 @@
 
 namespace PhpOffice\PhpSpreadsheet\Calculation\TextData;
 
-use PhpOffice\PhpSpreadsheet\Calculation\ArrayEnabled;
-use PhpOffice\PhpSpreadsheet\Calculation\Exception as CalcExp;
-use PhpOffice\PhpSpreadsheet\Calculation\Information\ExcelError;
+use PhpOffice\PhpSpreadsheet\Calculation\Calculation;
+use PhpOffice\PhpSpreadsheet\Calculation\Functions;
 use PhpOffice\PhpSpreadsheet\Shared\StringHelper;
 
 class Search
 {
-    use ArrayEnabled;
-
     /**
-     * FIND (case sensitive search).
+     * SEARCHSENSITIVE.
      *
      * @param mixed $needle The string to look for
-     *                         Or can be an array of values
      * @param mixed $haystack The string in which to look
-     *                         Or can be an array of values
      * @param mixed $offset Integer offset within $haystack to start searching from
-     *                         Or can be an array of values
      *
-     * @return array|int|string The offset where the first occurrence of needle was found in the haystack
-     *         If an array of values is passed for the $value or $chars arguments, then the returned result
-     *            will also be an array with matching dimensions
+     * @return int|string
      */
-    public static function sensitive(mixed $needle, mixed $haystack, mixed $offset = 1): array|string|int
+    public static function sensitive($needle, $haystack, $offset = 1)
     {
-        if (is_array($needle) || is_array($haystack) || is_array($offset)) {
-            return self::evaluateArrayArguments([self::class, __FUNCTION__], $needle, $haystack, $offset);
-        }
+        $needle = Functions::flattenSingleValue($needle);
+        $haystack = Functions::flattenSingleValue($haystack);
+        $offset = Functions::flattenSingleValue($offset);
 
-        try {
-            $needle = Helpers::extractString($needle, true);
-            $haystack = Helpers::extractString($haystack, true);
-            $offset = Helpers::extractInt($offset, 1, 0, true);
-        } catch (CalcExp $e) {
-            return $e->getMessage();
-        }
-
-        if (StringHelper::countCharacters($haystack) >= $offset) {
-            if (StringHelper::countCharacters($needle) === 0) {
-                return $offset;
+        if (!is_bool($needle)) {
+            if (is_bool($haystack)) {
+                $haystack = ($haystack) ? Calculation::getTRUE() : Calculation::getFALSE();
             }
 
-            $pos = mb_strpos($haystack, $needle, --$offset, 'UTF-8');
-            if ($pos !== false) {
-                return ++$pos;
+            if (($offset > 0) && (StringHelper::countCharacters($haystack) > $offset)) {
+                if (StringHelper::countCharacters($needle) === 0) {
+                    return $offset;
+                }
+
+                $pos = mb_strpos($haystack, $needle, --$offset, 'UTF-8');
+                if ($pos !== false) {
+                    return ++$pos;
+                }
             }
         }
 
-        return ExcelError::VALUE();
+        return Functions::VALUE();
     }
 
     /**
-     * SEARCH (case insensitive search).
+     * SEARCHINSENSITIVE.
      *
      * @param mixed $needle The string to look for
-     *                         Or can be an array of values
      * @param mixed $haystack The string in which to look
-     *                         Or can be an array of values
      * @param mixed $offset Integer offset within $haystack to start searching from
-     *                         Or can be an array of values
      *
-     * @return array|int|string The offset where the first occurrence of needle was found in the haystack
-     *         If an array of values is passed for the $value or $chars arguments, then the returned result
-     *            will also be an array with matching dimensions
+     * @return int|string
      */
-    public static function insensitive(mixed $needle, mixed $haystack, mixed $offset = 1): array|string|int
+    public static function insensitive($needle, $haystack, $offset = 1)
     {
-        if (is_array($needle) || is_array($haystack) || is_array($offset)) {
-            return self::evaluateArrayArguments([self::class, __FUNCTION__], $needle, $haystack, $offset);
-        }
+        $needle = Functions::flattenSingleValue($needle);
+        $haystack = Functions::flattenSingleValue($haystack);
+        $offset = Functions::flattenSingleValue($offset);
 
-        try {
-            $needle = Helpers::extractString($needle, true);
-            $haystack = Helpers::extractString($haystack, true);
-            $offset = Helpers::extractInt($offset, 1, 0, true);
-        } catch (CalcExp $e) {
-            return $e->getMessage();
-        }
-
-        if (StringHelper::countCharacters($haystack) >= $offset) {
-            if (StringHelper::countCharacters($needle) === 0) {
-                return $offset;
+        if (!is_bool($needle)) {
+            if (is_bool($haystack)) {
+                $haystack = ($haystack) ? Calculation::getTRUE() : Calculation::getFALSE();
             }
 
-            $pos = mb_stripos($haystack, $needle, --$offset, 'UTF-8');
-            if ($pos !== false) {
-                return ++$pos;
+            if (($offset > 0) && (StringHelper::countCharacters($haystack) > $offset)) {
+                if (StringHelper::countCharacters($needle) === 0) {
+                    return $offset;
+                }
+
+                $pos = mb_stripos($haystack, $needle, --$offset, 'UTF-8');
+                if ($pos !== false) {
+                    return ++$pos;
+                }
             }
         }
 
-        return ExcelError::VALUE();
+        return Functions::VALUE();
     }
 }

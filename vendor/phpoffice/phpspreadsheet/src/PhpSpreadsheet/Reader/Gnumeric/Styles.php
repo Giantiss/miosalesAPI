@@ -14,11 +14,18 @@ use SimpleXMLElement;
 
 class Styles
 {
-    private Spreadsheet $spreadsheet;
+    /**
+     * @var Spreadsheet
+     */
+    private $spreadsheet;
 
-    protected bool $readDataOnly;
+    /**
+     * @var bool
+     */
+    protected $readDataOnly = false;
 
-    public static array $mappings = [
+    /** @var array */
+    public static $mappings = [
         'borderStyle' => [
             '0' => Border::BORDER_NONE,
             '1' => Border::BORDER_THIN,
@@ -94,6 +101,10 @@ class Styles
     private function readStyles(SimpleXMLElement $styleRegion, int $maxRow, int $maxCol): void
     {
         foreach ($styleRegion as $style) {
+            if ($style === null) {
+                continue;
+            }
+
             $styleAttributes = $style->attributes();
             if ($styleAttributes !== null && ($styleAttributes['startRow'] <= $maxRow) && ($styleAttributes['startCol'] <= $maxCol)) {
                 $cellRange = $this->readStyleRange($styleAttributes, $maxCol, $maxRow);
@@ -103,8 +114,8 @@ class Styles
                 $styleArray = [];
                 // We still set the number format mask for date/time values, even if readDataOnly is true
                 //    so that we can identify whether a float is a float or a date value
-                $formatCode = $styleAttributes ? (string) $styleAttributes['Format'] : null;
-                if ($formatCode && Date::isDateTimeFormatCode($formatCode)) {
+                $formatCode = (string) $styleAttributes['Format'];
+                if (Date::isDateTimeFormatCode($formatCode)) {
                     $styleArray['numberFormat']['formatCode'] = $formatCode;
                 }
                 if ($this->readDataOnly === false && $styleAttributes !== null) {
@@ -172,7 +183,7 @@ class Styles
                 $styleArray['color']['rgb'] = self::parseGnumericColour($borderAttributes['Color']);
             }
 
-            self::addStyle($styleArray, 'borderStyle', (string) $borderAttributes['Style']);
+            self::addStyle($styleArray, 'borderStyle', $borderAttributes['Style']);
         }
 
         return $styleArray;
@@ -190,12 +201,12 @@ class Styles
 
     private function addColors(array &$styleArray, SimpleXMLElement $styleAttributes): void
     {
-        $RGB = self::parseGnumericColour((string) $styleAttributes['Fore']);
+        $RGB = self::parseGnumericColour($styleAttributes['Fore']);
         $styleArray['font']['color']['rgb'] = $RGB;
-        $RGB = self::parseGnumericColour((string) $styleAttributes['Back']);
+        $RGB = self::parseGnumericColour($styleAttributes['Back']);
         $shade = (string) $styleAttributes['Shade'];
         if (($RGB !== '000000') || ($shade !== '0')) {
-            $RGB2 = self::parseGnumericColour((string) $styleAttributes['PatternColor']);
+            $RGB2 = self::parseGnumericColour($styleAttributes['PatternColor']);
             if ($shade === '1') {
                 $styleArray['fill']['startColor']['rgb'] = $RGB;
                 $styleArray['fill']['endColor']['rgb'] = $RGB2;
@@ -223,8 +234,8 @@ class Styles
 
     private function readStyle(array $styleArray, SimpleXMLElement $styleAttributes, SimpleXMLElement $style): array
     {
-        self::addStyle2($styleArray, 'alignment', 'horizontal', (string) $styleAttributes['HAlign']);
-        self::addStyle2($styleArray, 'alignment', 'vertical', (string) $styleAttributes['VAlign']);
+        self::addStyle2($styleArray, 'alignment', 'horizontal', $styleAttributes['HAlign']);
+        self::addStyle2($styleArray, 'alignment', 'vertical', $styleAttributes['VAlign']);
         $styleArray['alignment']['wrapText'] = $styleAttributes['WrapText'] == '1';
         $styleArray['alignment']['textRotation'] = $this->calcRotation($styleAttributes);
         $styleArray['alignment']['shrinkToFit'] = $styleAttributes['ShrinkToFit'] == '1';
@@ -239,7 +250,7 @@ class Styles
             $styleArray['font']['bold'] = $fontAttributes['Bold'] == '1';
             $styleArray['font']['italic'] = $fontAttributes['Italic'] == '1';
             $styleArray['font']['strikethrough'] = $fontAttributes['StrikeThrough'] == '1';
-            self::addStyle2($styleArray, 'font', 'underline', (string) $fontAttributes['Underline']);
+            self::addStyle2($styleArray, 'font', 'underline', $fontAttributes['Underline']);
 
             switch ($fontAttributes['Script']) {
                 case '1':
@@ -261,12 +272,10 @@ class Styles
             $this->addBorderStyle($srssb, $styleArray, 'right');
             $this->addBorderDiagonal($srssb, $styleArray);
         }
-        //    TO DO
-        /*
         if (isset($style->Style->HyperLink)) {
+            //    TO DO
             $hyperlink = $style->Style->HyperLink->attributes();
         }
-        */
 
         return $styleArray;
     }

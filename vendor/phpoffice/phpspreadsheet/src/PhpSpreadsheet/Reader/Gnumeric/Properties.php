@@ -8,7 +8,10 @@ use SimpleXMLElement;
 
 class Properties
 {
-    protected Spreadsheet $spreadsheet;
+    /**
+     * @var Spreadsheet
+     */
+    protected $spreadsheet;
 
     public function __construct(Spreadsheet $spreadsheet)
     {
@@ -110,10 +113,8 @@ class Properties
 
                         break;
                     case 'user-defined':
-                        if ($attributes) {
-                            [, $attrName] = explode(':', (string) $attributes['name']);
-                            $this->userDefinedProperties($attrName, $propertyValue);
-                        }
+                        [, $attrName] = explode(':', $attributes['name']);
+                        $this->userDefinedProperties($attrName, $propertyValue);
 
                         break;
                 }

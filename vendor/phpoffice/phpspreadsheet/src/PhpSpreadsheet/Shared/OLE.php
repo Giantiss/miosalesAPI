@@ -58,59 +58,67 @@ class OLE
 
     /**
      * Array of PPS's found on the OLE container.
+     *
+     * @var array
      */
-    public array $_list = [];
+    public $_list = [];
 
     /**
      * Root directory of OLE container.
+     *
+     * @var Root
      */
-    public Root $root;
+    public $root;
 
     /**
      * Big Block Allocation Table.
      *
      * @var array (blockId => nextBlockId)
      */
-    public array $bbat;
+    public $bbat;
 
     /**
      * Short Block Allocation Table.
      *
      * @var array (blockId => nextBlockId)
      */
-    public array $sbat;
+    public $sbat;
 
     /**
      * Size of big blocks. This is usually 512.
      *
      * @var int number of octets per block
      */
-    public int $bigBlockSize;
+    public $bigBlockSize;
 
     /**
      * Size of small blocks. This is usually 64.
      *
      * @var int number of octets per block
      */
-    public int $smallBlockSize;
+    public $smallBlockSize;
 
     /**
      * Threshold for big blocks.
+     *
+     * @var int
      */
-    public int $bigBlockThreshold;
+    public $bigBlockThreshold;
 
     /**
      * Reads an OLE container from the contents of the file given.
      *
      * @acces public
      *
+     * @param string $file
+     *
      * @return bool true on success, PEAR_Error on failure
      */
-    public function read(string $filename): bool
+    public function read($file)
     {
-        $fh = @fopen($filename, 'rb');
-        if ($fh === false) {
-            throw new ReaderException("Can't open file $filename");
+        $fh = fopen($file, 'rb');
+        if (!$fh) {
+            throw new ReaderException("Can't open file $file");
         }
         $this->_file_handle = $fh;
 
@@ -192,8 +200,10 @@ class OLE
 
     /**
      * @param int $blockId byte offset from beginning of file
+     *
+     * @return int
      */
-    public function getBlockOffset(int $blockId): int
+    public function getBlockOffset($blockId)
     {
         return 512 + $blockId * $this->bigBlockSize;
     }
@@ -229,22 +239,19 @@ class OLE
             $path .= '&blockId=' . $blockIdOrPps;
         }
 
-        $resource = fopen($path, 'rb');
-        if ($resource === false) {
-            throw new Exception("Unable to open stream $path");
-        }
-
-        return $resource;
+        return fopen($path, 'rb');
     }
 
     /**
      * Reads a signed char.
      *
-     * @param resource $fileHandle file handle
+     * @param resource $fh file handle
+     *
+     * @return int
      */
-    private static function readInt1($fileHandle): int
+    private static function readInt1($fh)
     {
-        [, $tmp] = unpack('c', fread($fileHandle, 1) ?: '') ?: [0, 0];
+        [, $tmp] = unpack('c', fread($fh, 1));
 
         return $tmp;
     }
@@ -252,30 +259,27 @@ class OLE
     /**
      * Reads an unsigned short (2 octets).
      *
-     * @param resource $fileHandle file handle
+     * @param resource $fh file handle
+     *
+     * @return int
      */
-    private static function readInt2($fileHandle): int
+    private static function readInt2($fh)
     {
-        [, $tmp] = unpack('v', fread($fileHandle, 2) ?: '') ?: [0, 0];
+        [, $tmp] = unpack('v', fread($fh, 2));
 
         return $tmp;
     }
 
-    private const SIGNED_4OCTET_LIMIT = 2147483648;
-
-    private const SIGNED_4OCTET_SUBTRACT = 2 * self::SIGNED_4OCTET_LIMIT;
-
     /**
-     * Reads long (4 octets), interpreted as if signed on 32-bit system.
+     * Reads an unsigned long (4 octets).
      *
-     * @param resource $fileHandle file handle
+     * @param resource $fh file handle
+     *
+     * @return int
      */
-    private static function readInt4($fileHandle): int
+    private static function readInt4($fh)
     {
-        [, $tmp] = unpack('V', fread($fileHandle, 4) ?: '') ?: [0, 0];
-        if ($tmp >= self::SIGNED_4OCTET_LIMIT) {
-            $tmp -= self::SIGNED_4OCTET_SUBTRACT;
-        }
+        [, $tmp] = unpack('V', fread($fh, 4));
 
         return $tmp;
     }
@@ -288,12 +292,12 @@ class OLE
      *
      * @return bool true on success, PEAR_Error on failure
      */
-    public function readPpsWks(int $blockId): bool
+    public function readPpsWks($blockId)
     {
         $fh = $this->getStream($blockId);
         for ($pos = 0; true; $pos += 128) {
             fseek($fh, $pos, SEEK_SET);
-            $nameUtf16 = (string) fread($fh, 64);
+            $nameUtf16 = fread($fh, 64);
             $nameLength = self::readInt2($fh);
             $nameUtf16 = substr($nameUtf16, 0, $nameLength - 2);
             // Simple conversion from UTF-16LE to ISO-8859-1
@@ -301,7 +305,7 @@ class OLE
             $type = self::readInt1($fh);
             switch ($type) {
                 case self::OLE_PPS_TYPE_ROOT:
-                    $pps = new Root(null, null, []);
+                    $pps = new OLE\PPS\Root(null, null, []);
                     $this->root = $pps;
 
                     break;
@@ -323,8 +327,8 @@ class OLE
             $pps->NextPps = self::readInt4($fh);
             $pps->DirPps = self::readInt4($fh);
             fseek($fh, 20, SEEK_CUR);
-            $pps->Time1st = self::OLE2LocalDate((string) fread($fh, 8));
-            $pps->Time2nd = self::OLE2LocalDate((string) fread($fh, 8));
+            $pps->Time1st = self::OLE2LocalDate(fread($fh, 8));
+            $pps->Time2nd = self::OLE2LocalDate(fread($fh, 8));
             $pps->startBlock = self::readInt4($fh);
             $pps->Size = self::readInt4($fh);
             $pps->No = count($this->_list);
@@ -342,7 +346,7 @@ class OLE
             if ($pps->Type == self::OLE_PPS_TYPE_DIR || $pps->Type == self::OLE_PPS_TYPE_ROOT) {
                 $nos = [$pps->DirPps];
                 $pps->children = [];
-                while (!empty($nos)) {
+                while ($nos) {
                     $no = array_pop($nos);
                     if ($no != -1) {
                         $childPps = $this->_list[$no];
@@ -365,16 +369,16 @@ class OLE
      *
      * @return bool Whether the PPS tree for the given PPS is complete
      */
-    private function ppsTreeComplete(int $index): bool
+    private function ppsTreeComplete($index)
     {
-        return isset($this->_list[$index])
-            && ($pps = $this->_list[$index])
-            && ($pps->PrevPps == -1
-                || $this->ppsTreeComplete($pps->PrevPps))
-            && ($pps->NextPps == -1
-                || $this->ppsTreeComplete($pps->NextPps))
-            && ($pps->DirPps == -1
-                || $this->ppsTreeComplete($pps->DirPps));
+        return isset($this->_list[$index]) &&
+            ($pps = $this->_list[$index]) &&
+            ($pps->PrevPps == -1 ||
+                $this->ppsTreeComplete($pps->PrevPps)) &&
+            ($pps->NextPps == -1 ||
+                $this->ppsTreeComplete($pps->NextPps)) &&
+            ($pps->DirPps == -1 ||
+                $this->ppsTreeComplete($pps->DirPps));
     }
 
     /**
@@ -385,7 +389,7 @@ class OLE
      *
      * @return bool true if it's a File PPS, false otherwise
      */
-    public function isFile(int $index): bool
+    public function isFile($index)
     {
         if (isset($this->_list[$index])) {
             return $this->_list[$index]->Type == self::OLE_PPS_TYPE_FILE;
@@ -402,7 +406,7 @@ class OLE
      *
      * @return bool true if it's a Root PPS, false otherwise
      */
-    public function isRoot(int $index): bool
+    public function isRoot($index)
     {
         if (isset($this->_list[$index])) {
             return $this->_list[$index]->Type == self::OLE_PPS_TYPE_ROOT;
@@ -416,7 +420,7 @@ class OLE
      *
      * @return int The total number of PPS's found in the OLE container
      */
-    public function ppsTotal(): int
+    public function ppsTotal()
     {
         return count($this->_list);
     }
@@ -434,14 +438,14 @@ class OLE
      *
      * @see OLE_PPS_File::getStream()
      */
-    public function getData(int $index, int $position, int $length): string
+    public function getData($index, $position, $length)
     {
         // if position is not valid return empty string
         if (!isset($this->_list[$index]) || ($position >= $this->_list[$index]->Size) || ($position < 0)) {
             return '';
         }
         $fh = $this->getStream($this->_list[$index]);
-        $data = (string) stream_get_contents($fh, $length, $position);
+        $data = stream_get_contents($fh, $length, $position);
         fclose($fh);
 
         return $data;
@@ -455,7 +459,7 @@ class OLE
      *
      * @return int The amount of bytes in data the PPS has
      */
-    public function getDataLength(int $index): int
+    public function getDataLength($index)
     {
         if (isset($this->_list[$index])) {
             return $this->_list[$index]->Size;
@@ -471,7 +475,7 @@ class OLE
      *
      * @return string The string in Unicode
      */
-    public static function ascToUcs(string $ascii): string
+    public static function ascToUcs($ascii)
     {
         $rawname = '';
         $iMax = strlen($ascii);
@@ -491,12 +495,15 @@ class OLE
      *
      * @return string The string for the OLE container
      */
-    public static function localDateToOLE($date): string
+    public static function localDateToOLE($date)
     {
         if (!$date) {
             return "\x00\x00\x00\x00\x00\x00\x00\x00";
         }
         $dateTime = Date::dateTimeFromTimestamp("$date");
+
+        // factor used for separating numbers into 4 bytes parts
+        $factor = 2 ** 32;
 
         // days from 1-1-1601 until the beggining of UNIX era
         $days = 134774;
@@ -505,15 +512,22 @@ class OLE
         // multiply just to make MS happy
         $big_date *= 10000000;
 
+        $high_part = floor($big_date / $factor);
+        // lower 4 bytes
+        $low_part = floor((($big_date / $factor) - $high_part) * $factor);
+
         // Make HEX string
         $res = '';
 
-        $factor = 2 ** 56;
-        while ($factor >= 1) {
-            $hex = (int) floor($big_date / $factor);
-            $res = pack('c', $hex) . $res;
-            $big_date = fmod($big_date, $factor);
-            $factor /= 256;
+        for ($i = 0; $i < 4; ++$i) {
+            $hex = $low_part % 0x100;
+            $res .= pack('c', $hex);
+            $low_part /= 0x100;
+        }
+        for ($i = 0; $i < 4; ++$i) {
+            $hex = $high_part % 0x100;
+            $res .= pack('c', $hex);
+            $high_part /= 0x100;
         }
 
         return $res;
@@ -526,14 +540,14 @@ class OLE
      *
      * @return float|int The Unix timestamp corresponding to the string
      */
-    public static function OLE2LocalDate(string $oleTimestamp)
+    public static function OLE2LocalDate($oleTimestamp)
     {
         if (strlen($oleTimestamp) != 8) {
             throw new ReaderException('Expecting 8 byte string');
         }
 
         // convert to units of 100 ns since 1601:
-        $unpackedTimestamp = unpack('v4', $oleTimestamp) ?: [];
+        $unpackedTimestamp = unpack('v4', $oleTimestamp);
         $timestampHigh = (float) $unpackedTimestamp[4] * 65536 + (float) $unpackedTimestamp[3];
         $timestampLow = (float) $unpackedTimestamp[2] * 65536 + (float) $unpackedTimestamp[1];
 

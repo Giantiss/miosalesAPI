@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .upload-container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .progress-bar {
+            width: 100%;
+            background: #f3f3f3;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 10px;
+            height: 20px;
+        }
+        .progress-bar-inner {
+            height: 100%;
+            background: #4caf50;
+            width: 0;
+            transition: width 0.4s ease;
+        }
+        .form-group {
+            display: flex;
+            justify-content: flex-end; /* Aligns the button to the right */
+        }
+        .upload-btn {
+            display: flex;
+            align-items: center;
+            padding: 10px 20px;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            overflow: hidden;
+            position: relative;
+        }
+        .upload-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .upload-btn span {
+            margin-right: 30px; /* Space between text and spinner */
+        }
+        .spinner {
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #fff;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: none; /* Initially hidden */
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="upload-container">
+        <h2>Upload File</h2>
+        <form id="uploadForm" enctype="multipart/form-data">
+            <input type="file" id="fileInput" name="file" required>
+            <div class="form-group">
+                <button type="submit" id="uploadBtn" class="upload-btn">
+                    <span>Upload</span>
+                    <div class="spinner" id="spinner"></div>
+                </button>
+            </div>
+        </form>
+        <!-- <div class="progress-bar">
+            <div class="progress-bar-inner" id="progressBar"></div>
+        </div> -->
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('uploadForm');
+            const fileInput = document.getElementById('fileInput');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const progressBar = document.getElementById('progressBar');
+            const spinner = document.getElementById('spinner');
+
+            form.addEventListener('submit', function(event) {
+                event.preventDefault();
+
+                const file = fileInput.files[0];
+                if (!file) {
+                    alert('Please select a file.');
+                    return;
+                }
+
+                // Disable the upload button and show spinner
+                uploadBtn.disabled = true;
+                spinner.style.display = 'block';
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/MiosalonAPI/upload', true);
+
+                // Set the authorization header
+                xhr.setRequestHeader('Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4');
+
+                xhr.upload.onprogress = function(event) {
+                    if (event.lengthComputable) {
+                        const percentComplete = (event.loaded / event.total) * 100;
+                        progressBar.style.width = `${percentComplete}%`;
+                    } else {
+                        console.log('Progress event not computable.');
+                    }
+                };
+
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        alert('File uploaded successfully.');
+                    } else {
+                        alert('File upload failed.');
+                    }
+                    resetForm();
+                };
+
+                xhr.onerror = function() {
+                    alert('An error occurred during the upload.');
+                    resetForm();
+                };
+
+                xhr.send(formData);
+
+                function resetForm() {
+                    uploadBtn.disabled = false;
+                    spinner.style.display = 'none';
+                    progressBar.style.width = '0%';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

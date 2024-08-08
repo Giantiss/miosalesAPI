@@ -9,16 +9,20 @@ class Delimiter
     /** @var resource */
     protected $fileHandle;
 
-    protected string $escapeCharacter;
+    /** @var string */
+    protected $escapeCharacter;
 
-    protected string $enclosure;
+    /** @var string */
+    protected $enclosure;
 
-    protected array $counts = [];
+    /** @var array */
+    protected $counts = [];
 
-    protected int $numberLines = 0;
+    /** @var int */
+    protected $numberLines = 0;
 
     /** @var ?string */
-    protected ?string $delimiter = null;
+    protected $delimiter;
 
     /**
      * @param resource $fileHandle
@@ -88,7 +92,9 @@ class Delimiter
 
             $meanSquareDeviations[$delimiter] = array_reduce(
                 $series,
-                fn ($sum, $value): int|float => $sum + ($value - $median) ** 2
+                function ($sum, $value) use ($median) {
+                    return $sum + ($value - $median) ** 2;
+                }
             ) / count($series);
         }
 
@@ -134,12 +140,12 @@ class Delimiter
             $line = $line . $newLine;
 
             // Drop everything that is enclosed to avoid counting false positives in enclosures
-            $line = (string) preg_replace('/(' . $enclosure . '.*' . $enclosure . ')/Us', '', $line);
+            $line = preg_replace('/(' . $enclosure . '.*' . $enclosure . ')/Us', '', $line);
 
             // See if we have any enclosures left in the line
             // if we still have an enclosure then we need to read the next line as well
-        } while (preg_match('/(' . $enclosure . ')/', $line) > 0);
+        } while (preg_match('/(' . $enclosure . ')/', $line ?? '') > 0);
 
-        return ($line !== '') ? $line : false;
+        return $line ?? false;
     }
 }

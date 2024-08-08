@@ -8,28 +8,38 @@ class Security
 {
     /**
      * LockRevision.
+     *
+     * @var bool
      */
-    private bool $lockRevision = false;
+    private $lockRevision = false;
 
     /**
      * LockStructure.
+     *
+     * @var bool
      */
-    private bool $lockStructure = false;
+    private $lockStructure = false;
 
     /**
      * LockWindows.
+     *
+     * @var bool
      */
-    private bool $lockWindows = false;
+    private $lockWindows = false;
 
     /**
      * RevisionsPassword.
+     *
+     * @var string
      */
-    private string $revisionsPassword = '';
+    private $revisionsPassword = '';
 
     /**
      * WorkbookPassword.
+     *
+     * @var string
      */
-    private string $workbookPassword = '';
+    private $workbookPassword = '';
 
     /**
      * Create a new Document Security instance.
@@ -43,9 +53,9 @@ class Security
      */
     public function isSecurityEnabled(): bool
     {
-        return $this->lockRevision
-                || $this->lockStructure
-                || $this->lockWindows;
+        return  $this->lockRevision ||
+                $this->lockStructure ||
+                $this->lockWindows;
     }
 
     public function getLockRevision(): bool
@@ -53,10 +63,10 @@ class Security
         return $this->lockRevision;
     }
 
-    public function setLockRevision(?bool $locked): self
+    public function setLockRevision(?bool $pValue): self
     {
-        if ($locked !== null) {
-            $this->lockRevision = $locked;
+        if ($pValue !== null) {
+            $this->lockRevision = $pValue;
         }
 
         return $this;
@@ -67,10 +77,10 @@ class Security
         return $this->lockStructure;
     }
 
-    public function setLockStructure(?bool $locked): self
+    public function setLockStructure(?bool $pValue): self
     {
-        if ($locked !== null) {
-            $this->lockStructure = $locked;
+        if ($pValue !== null) {
+            $this->lockStructure = $pValue;
         }
 
         return $this;
@@ -81,10 +91,10 @@ class Security
         return $this->lockWindows;
     }
 
-    public function setLockWindows(?bool $locked): self
+    public function setLockWindows(?bool $pValue): self
     {
-        if ($locked !== null) {
-            $this->lockWindows = $locked;
+        if ($pValue !== null) {
+            $this->lockWindows = $pValue;
         }
 
         return $this;
@@ -95,20 +105,13 @@ class Security
         return $this->revisionsPassword;
     }
 
-    /**
-     * Set RevisionsPassword.
-     *
-     * @param bool $alreadyHashed If the password has already been hashed, set this to true
-     *
-     * @return $this
-     */
-    public function setRevisionsPassword(?string $password, bool $alreadyHashed = false): static
+    public function setRevisionsPassword(?string $pValue, bool $pAlreadyHashed = false): self
     {
-        if ($password !== null) {
-            if (!$alreadyHashed) {
-                $password = PasswordHasher::hashPassword($password);
+        if ($pValue !== null) {
+            if (!$pAlreadyHashed) {
+                $pValue = PasswordHasher::hashPassword($pValue);
             }
-            $this->revisionsPassword = $password;
+            $this->revisionsPassword = $pValue;
         }
 
         return $this;
@@ -119,20 +122,13 @@ class Security
         return $this->workbookPassword;
     }
 
-    /**
-     * Set WorkbookPassword.
-     *
-     * @param bool $alreadyHashed If the password has already been hashed, set this to true
-     *
-     * @return $this
-     */
-    public function setWorkbookPassword(?string $password, bool $alreadyHashed = false): static
+    public function setWorkbookPassword(?string $pValue, bool $pAlreadyHashed = false): self
     {
-        if ($password !== null) {
-            if (!$alreadyHashed) {
-                $password = PasswordHasher::hashPassword($password);
+        if ($pValue !== null) {
+            if (!$pAlreadyHashed) {
+                $pValue = PasswordHasher::hashPassword($pValue);
             }
-            $this->workbookPassword = $password;
+            $this->workbookPassword = $pValue;
         }
 
         return $this;

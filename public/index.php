@@ -18,7 +18,7 @@ function log_message($message) {
 
 // Get the request method and URI
 $requestMethod = $_SERVER['REQUEST_METHOD'];
-$pathInfo = isset($_SERVER['REQUEST_URI']) ? explode('/', trim($_SERVER['REQUEST_URI'], '/')) : [];
+$pathInfo = explode('/', trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/'));
 
 // Check for the Authorization header
 $headers = getallheaders();
@@ -35,16 +35,21 @@ if ($authHeader !== $validToken) {
     exit();
 }
 
-// Route the request
+log_message('Request Method: ' . $requestMethod);
+log_message('Path Info: ' . print_r($pathInfo, true));
+
+// Expecting the path to be ['MiosalonAPI', 'upload'] or ['MiosalonAPI', 'download']
 if ($requestMethod == 'POST' && isset($pathInfo[1]) && $pathInfo[1] == 'upload') {
     // Handle file upload
     if (isset($_FILES['file'])) {
         $fileTmpName = $_FILES['file']['tmp_name'];
         log_message('File upload path: ' . $fileTmpName);
-        
+
         if (!is_uploaded_file($fileTmpName)) {
             http_response_code(400);
-            echo json_encode(['error' => 'Invalid file upload']);
+            $responseData = json_encode(['error' => 'Invalid file upload']);
+            header('Content-Length: ' . strlen($responseData));
+            echo $responseData;
             log_message('Invalid file upload');
             exit();
         }
@@ -53,16 +58,22 @@ if ($requestMethod == 'POST' && isset($pathInfo[1]) && $pathInfo[1] == 'upload')
         
         if ($response['status'] === 'success') {
             http_response_code(200);
-            echo json_encode(['message' => 'File imported successfully']);
+            $responseData = json_encode(['message' => 'File imported successfully']);
+            header('Content-Length: ' . strlen($responseData));
+            echo $responseData;
             log_message('File imported successfully');
         } else {
             http_response_code(400);
-            echo json_encode(['error' => $response['message']]);
+            $responseData = json_encode(['error' => $response['message']]);
+            header('Content-Length: ' . strlen($responseData));
+            echo $responseData;
             log_message('File import failed: ' . $response['message']);
         }
     } else {
         http_response_code(400);
-        echo json_encode(['error' => 'No file uploaded']);
+        $responseData = json_encode(['error' => 'No file uploaded']);
+        header('Content-Length: ' . strlen($responseData));
+        echo $responseData;
         log_message('No file uploaded');
     }
 } elseif ($requestMethod == 'GET' && isset($pathInfo[1]) && $pathInfo[1] == 'download') {
@@ -72,18 +83,26 @@ if ($requestMethod == 'POST' && isset($pathInfo[1]) && $pathInfo[1] == 'upload')
     $response = $controller->exportExcel($filePath);
 
     if ($response['status'] === 'success') {
+        $fileSize = filesize($filePath);
+
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         header('Content-Disposition: attachment; filename="miosales_export.xlsx"');
+        header('Content-Length: ' . $fileSize);
+
         readfile($filePath);
         log_message('File exported successfully and downloaded');
         exit();
     } else {
         http_response_code(400);
-        echo json_encode(['error' => $response['message']]);
+        $responseData = json_encode(['error' => $response['message']]);
+        header('Content-Length: ' . strlen($responseData));
+        echo $responseData;
         log_message('File export failed: ' . $response['message']);
     }
 } else {
     http_response_code(400);
-    echo json_encode(['error' => 'Invalid request']);
+    $responseData = json_encode(['error' => 'Invalid request']);
+    header('Content-Length: ' . strlen($responseData));
+    echo $responseData;
     log_message('Invalid request method or path');
 }

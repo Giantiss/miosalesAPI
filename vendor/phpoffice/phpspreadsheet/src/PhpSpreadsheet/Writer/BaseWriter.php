@@ -6,91 +6,92 @@ abstract class BaseWriter implements IWriter
 {
     /**
      * Write charts that are defined in the workbook?
-     * Identifies whether the Writer should write definitions for any charts that exist in the PhpSpreadsheet object.
+     * Identifies whether the Writer should write definitions for any charts that exist in the PhpSpreadsheet object;.
+     *
+     * @var bool
      */
-    protected bool $includeCharts = false;
+    protected $includeCharts = false;
 
     /**
      * Pre-calculate formulas
      * Forces PhpSpreadsheet to recalculate all formulae in a workbook when saving, so that the pre-calculated values are
      * immediately available to MS Excel or other office spreadsheet viewer when opening the file.
+     *
+     * @var bool
      */
-    protected bool $preCalculateFormulas = true;
+    protected $preCalculateFormulas = true;
 
     /**
      * Use disk caching where possible?
+     *
+     * @var bool
      */
-    private bool $useDiskCaching = false;
+    private $useDiskCaching = false;
 
     /**
      * Disk caching directory.
+     *
+     * @var string
      */
-    private string $diskCachingDirectory = './';
+    private $diskCachingDirectory = './';
 
     /**
      * @var resource
      */
     protected $fileHandle;
 
-    private bool $shouldCloseFile;
+    /**
+     * @var bool
+     */
+    private $shouldCloseFile;
 
-    public function getIncludeCharts(): bool
+    public function getIncludeCharts()
     {
         return $this->includeCharts;
     }
 
-    public function setIncludeCharts(bool $includeCharts): self
+    public function setIncludeCharts($pValue)
     {
-        $this->includeCharts = $includeCharts;
+        $this->includeCharts = (bool) $pValue;
 
         return $this;
     }
 
-    public function getPreCalculateFormulas(): bool
+    public function getPreCalculateFormulas()
     {
         return $this->preCalculateFormulas;
     }
 
-    public function setPreCalculateFormulas(bool $precalculateFormulas): self
+    public function setPreCalculateFormulas($pValue)
     {
-        $this->preCalculateFormulas = $precalculateFormulas;
+        $this->preCalculateFormulas = (bool) $pValue;
 
         return $this;
     }
 
-    public function getUseDiskCaching(): bool
+    public function getUseDiskCaching()
     {
         return $this->useDiskCaching;
     }
 
-    public function setUseDiskCaching(bool $useDiskCache, ?string $cacheDirectory = null): self
+    public function setUseDiskCaching($pValue, $pDirectory = null)
     {
-        $this->useDiskCaching = $useDiskCache;
+        $this->useDiskCaching = $pValue;
 
-        if ($cacheDirectory !== null) {
-            if (is_dir($cacheDirectory)) {
-                $this->diskCachingDirectory = $cacheDirectory;
+        if ($pDirectory !== null) {
+            if (is_dir($pDirectory)) {
+                $this->diskCachingDirectory = $pDirectory;
             } else {
-                throw new Exception("Directory does not exist: $cacheDirectory");
+                throw new Exception("Directory does not exist: $pDirectory");
             }
         }
 
         return $this;
     }
 
-    public function getDiskCachingDirectory(): string
+    public function getDiskCachingDirectory()
     {
         return $this->diskCachingDirectory;
-    }
-
-    protected function processFlags(int $flags): void
-    {
-        if (((bool) ($flags & self::SAVE_WITH_CHARTS)) === true) {
-            $this->setIncludeCharts(true);
-        }
-        if (((bool) ($flags & self::DISABLE_PRECALCULATE_FORMULAE)) === true) {
-            $this->setPreCalculateFormulas(false);
-        }
     }
 
     /**
@@ -107,14 +108,7 @@ abstract class BaseWriter implements IWriter
             return;
         }
 
-        $mode = 'wb';
-        $scheme = parse_url($filename, PHP_URL_SCHEME);
-        if ($scheme === 's3') {
-            // @codeCoverageIgnoreStart
-            $mode = 'w';
-            // @codeCoverageIgnoreEnd
-        }
-        $fileHandle = $filename ? fopen($filename, $mode) : false;
+        $fileHandle = $filename ? fopen($filename, 'wb+') : false;
         if ($fileHandle === false) {
             throw new Exception('Could not open file "' . $filename . '" for writing.');
         }

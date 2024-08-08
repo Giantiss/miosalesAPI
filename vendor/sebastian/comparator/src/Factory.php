@@ -1,4 +1,4 @@
-<?php declare(strict_types=1);
+<?php
 /*
  * This file is part of sebastian/comparator.
  *
@@ -9,37 +9,55 @@
  */
 namespace SebastianBergmann\Comparator;
 
-use function array_unshift;
-
-final class Factory
+/**
+ * Factory for comparators which compare values for equality.
+ */
+class Factory
 {
-    private static ?Factory $instance = null;
+    /**
+     * @var Factory
+     */
+    private static $instance;
 
     /**
-     * @var list<Comparator>
+     * @var Comparator[]
      */
-    private array $customComparators = [];
+    private $customComparators = [];
 
     /**
-     * @var list<Comparator>
+     * @var Comparator[]
      */
-    private array $defaultComparators = [];
+    private $defaultComparators = [];
 
-    public static function getInstance(): self
+    /**
+     * @return Factory
+     */
+    public static function getInstance()
     {
         if (self::$instance === null) {
-            self::$instance = new self; // @codeCoverageIgnore
+            self::$instance = new self;
         }
 
         return self::$instance;
     }
 
+    /**
+     * Constructs a new factory.
+     */
     public function __construct()
     {
         $this->registerDefaultComparators();
     }
 
-    public function getComparatorFor(mixed $expected, mixed $actual): Comparator
+    /**
+     * Returns the correct comparator for comparing two values.
+     *
+     * @param mixed $expected The first value to compare
+     * @param mixed $actual   The second value to compare
+     *
+     * @return Comparator
+     */
+    public function getComparatorFor($expected, $actual)
     {
         foreach ($this->customComparators as $comparator) {
             if ($comparator->accepts($expected, $actual)) {
@@ -52,8 +70,6 @@ final class Factory
                 return $comparator;
             }
         }
-
-        throw new RuntimeException('No suitable Comparator implementation found');
     }
 
     /**
@@ -63,10 +79,12 @@ final class Factory
      * returns TRUE for the compared values. It has higher priority than the
      * existing comparators, meaning that its accept() method will be invoked
      * before those of the other comparators.
+     *
+     * @param Comparator $comparator The comparator to be registered
      */
-    public function register(Comparator $comparator): void
+    public function register(Comparator $comparator)
     {
-        array_unshift($this->customComparators, $comparator);
+        \array_unshift($this->customComparators, $comparator);
 
         $comparator->setFactory($this);
     }
@@ -75,8 +93,10 @@ final class Factory
      * Unregisters a comparator.
      *
      * This comparator will no longer be considered by getComparatorFor().
+     *
+     * @param Comparator $comparator The comparator to be unregistered
      */
-    public function unregister(Comparator $comparator): void
+    public function unregister(Comparator $comparator)
     {
         foreach ($this->customComparators as $key => $_comparator) {
             if ($comparator === $_comparator) {
@@ -85,12 +105,15 @@ final class Factory
         }
     }
 
-    public function reset(): void
+    /**
+     * Unregisters all non-default comparators.
+     */
+    public function reset()
     {
         $this->customComparators = [];
     }
 
-    private function registerDefaultComparators(): void
+    private function registerDefaultComparators()
     {
         $this->registerDefaultComparator(new MockObjectComparator);
         $this->registerDefaultComparator(new DateTimeComparator);
@@ -105,7 +128,7 @@ final class Factory
         $this->registerDefaultComparator(new TypeComparator);
     }
 
-    private function registerDefaultComparator(Comparator $comparator): void
+    private function registerDefaultComparator(Comparator $comparator)
     {
         $this->defaultComparators[] = $comparator;
 

@@ -2,19 +2,18 @@
 
 namespace PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
-use Exception;
 use PhpOffice\PhpSpreadsheet\Calculation\Calculation;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\DefinedName;
 use PhpOffice\PhpSpreadsheet\Shared\XMLWriter;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet as ActualWorksheet;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class DefinedNames
 {
-    private XMLWriter $objWriter;
+    private $objWriter;
 
-    private Spreadsheet $spreadsheet;
+    private $spreadsheet;
 
     public function __construct(XMLWriter $objWriter, Spreadsheet $spreadsheet)
     {
@@ -64,29 +63,19 @@ class DefinedNames
     /**
      * Write Defined Name for named range.
      */
-    private function writeDefinedName(DefinedName $definedName): void
+    private function writeDefinedName(DefinedName $pDefinedName): void
     {
         // definedName for named range
-        $local = -1;
-        if ($definedName->getLocalOnly() && $definedName->getScope() !== null) {
-            try {
-                $local = $definedName->getScope()->getParentOrThrow()->getIndex($definedName->getScope());
-            } catch (Exception) {
-                // See issue 2266 - deleting sheet which contains
-                //     defined names will cause Exception above.
-                return;
-            }
-        }
         $this->objWriter->startElement('definedName');
-        $this->objWriter->writeAttribute('name', $definedName->getName());
-        if ($local >= 0) {
+        $this->objWriter->writeAttribute('name', $pDefinedName->getName());
+        if ($pDefinedName->getLocalOnly() && $pDefinedName->getScope() !== null) {
             $this->objWriter->writeAttribute(
                 'localSheetId',
-                "$local"
+                $pDefinedName->getScope()->getParent()->getIndex($pDefinedName->getScope())
             );
         }
 
-        $definedRange = $this->getDefinedRange($definedName);
+        $definedRange = $this->getDefinedRange($pDefinedName);
 
         $this->objWriter->writeRawData($definedRange);
 
@@ -96,29 +85,27 @@ class DefinedNames
     /**
      * Write Defined Name for autoFilter.
      */
-    private function writeNamedRangeForAutofilter(ActualWorksheet $worksheet, int $worksheetId = 0): void
+    private function writeNamedRangeForAutofilter(Worksheet $pSheet, int $pSheetId = 0): void
     {
         // NamedRange for autoFilter
-        $autoFilterRange = $worksheet->getAutoFilter()->getRange();
+        $autoFilterRange = $pSheet->getAutoFilter()->getRange();
         if (!empty($autoFilterRange)) {
             $this->objWriter->startElement('definedName');
             $this->objWriter->writeAttribute('name', '_xlnm._FilterDatabase');
-            $this->objWriter->writeAttribute('localSheetId', "$worksheetId");
+            $this->objWriter->writeAttribute('localSheetId', $pSheetId);
             $this->objWriter->writeAttribute('hidden', '1');
 
             // Create absolute coordinate and write as raw text
             $range = Coordinate::splitRange($autoFilterRange);
             $range = $range[0];
             //    Strip any worksheet ref so we can make the cell ref absolute
-            [, $range[0]] = ActualWorksheet::extractSheetTitle($range[0], true);
+            [, $range[0]] = Worksheet::extractSheetTitle($range[0], true);
 
-            $range[0] = Coordinate::absoluteCoordinate($range[0] ?? '');
-            if (count($range) > 1) {
-                $range[1] = Coordinate::absoluteCoordinate($range[1]);
-            }
+            $range[0] = Coordinate::absoluteCoordinate($range[0]);
+            $range[1] = Coordinate::absoluteCoordinate($range[1]);
             $range = implode(':', $range);
 
-            $this->objWriter->writeRawData('\'' . str_replace("'", "''", $worksheet->getTitle()) . '\'!' . $range);
+            $this->objWriter->writeRawData('\'' . str_replace("'", "''", $pSheet->getTitle()) . '\'!' . $range);
 
             $this->objWriter->endElement();
         }
@@ -127,33 +114,33 @@ class DefinedNames
     /**
      * Write Defined Name for PrintTitles.
      */
-    private function writeNamedRangeForPrintTitles(ActualWorksheet $worksheet, int $worksheetId = 0): void
+    private function writeNamedRangeForPrintTitles(Worksheet $pSheet, int $pSheetId = 0): void
     {
         // NamedRange for PrintTitles
-        if ($worksheet->getPageSetup()->isColumnsToRepeatAtLeftSet() || $worksheet->getPageSetup()->isRowsToRepeatAtTopSet()) {
+        if ($pSheet->getPageSetup()->isColumnsToRepeatAtLeftSet() || $pSheet->getPageSetup()->isRowsToRepeatAtTopSet()) {
             $this->objWriter->startElement('definedName');
             $this->objWriter->writeAttribute('name', '_xlnm.Print_Titles');
-            $this->objWriter->writeAttribute('localSheetId', "$worksheetId");
+            $this->objWriter->writeAttribute('localSheetId', $pSheetId);
 
             // Setting string
             $settingString = '';
 
             // Columns to repeat
-            if ($worksheet->getPageSetup()->isColumnsToRepeatAtLeftSet()) {
-                $repeat = $worksheet->getPageSetup()->getColumnsToRepeatAtLeft();
+            if ($pSheet->getPageSetup()->isColumnsToRepeatAtLeftSet()) {
+                $repeat = $pSheet->getPageSetup()->getColumnsToRepeatAtLeft();
 
-                $settingString .= '\'' . str_replace("'", "''", $worksheet->getTitle()) . '\'!$' . $repeat[0] . ':$' . $repeat[1];
+                $settingString .= '\'' . str_replace("'", "''", $pSheet->getTitle()) . '\'!$' . $repeat[0] . ':$' . $repeat[1];
             }
 
             // Rows to repeat
-            if ($worksheet->getPageSetup()->isRowsToRepeatAtTopSet()) {
-                if ($worksheet->getPageSetup()->isColumnsToRepeatAtLeftSet()) {
+            if ($pSheet->getPageSetup()->isRowsToRepeatAtTopSet()) {
+                if ($pSheet->getPageSetup()->isColumnsToRepeatAtLeftSet()) {
                     $settingString .= ',';
                 }
 
-                $repeat = $worksheet->getPageSetup()->getRowsToRepeatAtTop();
+                $repeat = $pSheet->getPageSetup()->getRowsToRepeatAtTop();
 
-                $settingString .= '\'' . str_replace("'", "''", $worksheet->getTitle()) . '\'!$' . $repeat[0] . ':$' . $repeat[1];
+                $settingString .= '\'' . str_replace("'", "''", $pSheet->getTitle()) . '\'!$' . $repeat[0] . ':$' . $repeat[1];
             }
 
             $this->objWriter->writeRawData($settingString);
@@ -165,22 +152,22 @@ class DefinedNames
     /**
      * Write Defined Name for PrintTitles.
      */
-    private function writeNamedRangeForPrintArea(ActualWorksheet $worksheet, int $worksheetId = 0): void
+    private function writeNamedRangeForPrintArea(Worksheet $pSheet, int $pSheetId = 0): void
     {
         // NamedRange for PrintArea
-        if ($worksheet->getPageSetup()->isPrintAreaSet()) {
+        if ($pSheet->getPageSetup()->isPrintAreaSet()) {
             $this->objWriter->startElement('definedName');
             $this->objWriter->writeAttribute('name', '_xlnm.Print_Area');
-            $this->objWriter->writeAttribute('localSheetId', "$worksheetId");
+            $this->objWriter->writeAttribute('localSheetId', $pSheetId);
 
             // Print area
-            $printArea = Coordinate::splitRange($worksheet->getPageSetup()->getPrintArea());
+            $printArea = Coordinate::splitRange($pSheet->getPageSetup()->getPrintArea());
 
             $chunks = [];
             foreach ($printArea as $printAreaRect) {
                 $printAreaRect[0] = Coordinate::absoluteReference($printAreaRect[0]);
                 $printAreaRect[1] = Coordinate::absoluteReference($printAreaRect[1]);
-                $chunks[] = '\'' . str_replace("'", "''", $worksheet->getTitle()) . '\'!' . implode(':', $printAreaRect);
+                $chunks[] = '\'' . str_replace("'", "''", $pSheet->getTitle()) . '\'!' . implode(':', $printAreaRect);
             }
 
             $this->objWriter->writeRawData(implode(',', $chunks));
@@ -189,9 +176,9 @@ class DefinedNames
         }
     }
 
-    private function getDefinedRange(DefinedName $definedName): string
+    private function getDefinedRange(DefinedName $pDefinedName): string
     {
-        $definedRange = $definedName->getValue();
+        $definedRange = $pDefinedName->getValue();
         $splitCount = preg_match_all(
             '/' . Calculation::CALCULATION_REGEXP_CELLREF_RELATIVE . '/mui',
             $definedRange,
@@ -218,8 +205,7 @@ class DefinedNames
             if (empty($worksheet)) {
                 if (($offset === 0) || ($definedRange[$offset - 1] !== ':')) {
                     // We should have a worksheet
-                    $ws = $definedName->getWorksheet();
-                    $worksheet = ($ws === null) ? null : $ws->getTitle();
+                    $worksheet = $pDefinedName->getWorksheet() ? $pDefinedName->getWorksheet()->getTitle() : null;
                 }
             } else {
                 $worksheet = str_replace("''", "'", trim($worksheet, "'"));
@@ -233,7 +219,7 @@ class DefinedNames
             $definedRange = substr($definedRange, 0, $offset) . $newRange . substr($definedRange, $offset + $length);
         }
 
-        if (str_starts_with($definedRange, '=')) {
+        if (substr($definedRange, 0, 1) === '=') {
             $definedRange = substr($definedRange, 1);
         }
 

@@ -9,55 +9,40 @@
  */
 namespace SebastianBergmann\Type;
 
-use function array_pop;
-use function assert;
-use function explode;
-use function implode;
-use function substr;
-use ReflectionClass;
-
-final readonly class TypeName
+final class TypeName
 {
-    private ?string $namespaceName;
+    /**
+     * @var ?string
+     */
+    private $namespaceName;
 
     /**
-     * @var non-empty-string
+     * @var string
      */
-    private string $simpleName;
+    private $simpleName;
 
-    /**
-     * @param class-string $fullClassName
-     */
     public static function fromQualifiedName(string $fullClassName): self
     {
         if ($fullClassName[0] === '\\') {
-            $fullClassName = substr($fullClassName, 1);
+            $fullClassName = \substr($fullClassName, 1);
         }
 
-        $classNameParts = explode('\\', $fullClassName);
+        $classNameParts = \explode('\\', $fullClassName);
 
-        $simpleName    = array_pop($classNameParts);
-        $namespaceName = implode('\\', $classNameParts);
-
-        assert($simpleName !== '');
+        $simpleName    = \array_pop($classNameParts);
+        $namespaceName = \implode('\\', $classNameParts);
 
         return new self($namespaceName, $simpleName);
     }
 
-    /**
-     * @phpstan-ignore missingType.generics
-     */
-    public static function fromReflection(ReflectionClass $type): self
+    public static function fromReflection(\ReflectionClass $type): self
     {
         return new self(
             $type->getNamespaceName(),
-            $type->getShortName(),
+            $type->getShortName()
         );
     }
 
-    /**
-     * @param non-empty-string $simpleName
-     */
     public function __construct(?string $namespaceName, string $simpleName)
     {
         if ($namespaceName === '') {
@@ -68,23 +53,17 @@ final readonly class TypeName
         $this->simpleName    = $simpleName;
     }
 
-    public function namespaceName(): ?string
+    public function getNamespaceName(): ?string
     {
         return $this->namespaceName;
     }
 
-    /**
-     * @return non-empty-string
-     */
-    public function simpleName(): string
+    public function getSimpleName(): string
     {
         return $this->simpleName;
     }
 
-    /**
-     * @return non-empty-string
-     */
-    public function qualifiedName(): string
+    public function getQualifiedName(): string
     {
         return $this->namespaceName === null
              ? $this->simpleName
