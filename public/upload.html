@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,143 +8,296 @@
     <style>
         body {
             font-family: Arial, sans-serif;
+            background-color: #f9f9f9;
         }
+
         .upload-container {
             max-width: 600px;
-            margin: 0 auto;
+            margin: 50px auto;
             padding: 20px;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.1);
         }
-        .progress-bar {
-            width: 100%;
-            background: #f3f3f3;
-            border-radius: 5px;
-            overflow: hidden;
-            margin-top: 10px;
-            height: 20px;
-        }
-        .progress-bar-inner {
-            height: 100%;
-            background: #4caf50;
-            width: 0;
-            transition: width 0.4s ease;
-        }
-        .form-group {
+
+        .upload-container h2 {
+            text-align: center;
+            margin-bottom: 20px;
             display: flex;
-            justify-content: flex-end; /* Aligns the button to the right */
-        }
-        .upload-btn {
-            display: flex;
+            flex-direction: column;
             align-items: center;
+        }
+
+        .drag-drop-area {
+            border: 2px dashed #ccc;
+            border-radius: 5px;
+            padding: 30px;
+            text-align: center;
+            color: #aaa;
+            transition: background-color 0.3s ease;
+        }
+
+        .drag-drop-area.dragover {
+            background-color: #f0f0f0;
+        }
+
+        .button-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+        }
+
+        .select-file-btn,
+        .upload-btn {
+            display: inline-block;
             padding: 10px 20px;
             background-color: #4caf50;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            overflow: hidden;
             position: relative;
         }
+
         .upload-btn:disabled {
             background-color: #ccc;
             cursor: not-allowed;
         }
-        .upload-btn span {
-            margin-right: 30px; /* Space between text and spinner */
-        }
-        .spinner {
-            border: 8px solid #f3f3f3;
-            border-top: 8px solid #fff;
+
+        .upload-btn .spinner {
+            display: none;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-left: 2px solid white;
             border-radius: 50%;
             width: 20px;
             height: 20px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            margin-left: -10px;
+            margin-top: -10px;
             animation: spin 1s linear infinite;
-            display: none; /* Initially hidden */
         }
+
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        #cancel {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 10px;
+            cursor: pointer;
+        }
+
+        #cancel:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .button-wrapper .cancel-btn-wrapper {
+            margin-left: auto;
+        }
+
+        .error-message,
+        .success-message {
+            margin-top: 10px;
+            width: 100%;
+            /* Ensure it takes full width */
+            text-align: center;
+            /* Center text horizontally */
+        }
+
+        .success-message {
+            color: green;
+            /*choose any color you prefer */
+        }
+
+        .upload-btn .spinner-wrapper {
+            display: flex;
+            align-items: center;
+        }
+
+        .upload-btn .spinner-wrapper .spinner {
+            margin-left: 10px;
+            /* Space between text and spinner */
         }
     </style>
 </head>
+
 <body>
+
     <div class="upload-container">
         <h2>Upload File</h2>
-        <form id="uploadForm" enctype="multipart/form-data">
-            <input type="file" id="fileInput" name="file" required>
-            <div class="form-group">
-                <button type="submit" id="uploadBtn" class="upload-btn">
-                    <span>Upload</span>
-                    <div class="spinner" id="spinner"></div>
-                </button>
-            </div>
+        <div class="drag-drop-area" id="dragDropArea">
+            <p>Drag & Drop your file here or</p>
+            <button type="button" class="select-file-btn" id="selectFile">Select File</button>
+            <p id="fileName" style="margin-top: 10px; color: #333;"></p>
+        </div>
+        <form id="form" enctype="multipart/form-data" style="display: none;">
+            <input type="file" id="file" name="file" required>
         </form>
-        <!-- <div class="progress-bar">
-            <div class="progress-bar-inner" id="progressBar"></div>
-        </div> -->
+        <div class="button-wrapper">
+            <button type="button" class="upload-btn" id="uploadBtn" disabled>
+                <div class="spinner-wrapper">
+                    <span>Upload</span>
+                    <div class="spinner"></div>
+                </div>
+            </button>
+            <div class="cancel-btn-wrapper">
+                <button id="cancel" disabled>Cancel</button>
+            </div>
+            <br />
+        </div>
+        <div class="error-message" id="errorMessage" style="color: red; justify-content: center; align-items: center;">
+        </div>
+        <div class="success-message" id="successMessage"></div>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const form = document.getElementById('uploadForm');
-            const fileInput = document.getElementById('fileInput');
-            const uploadBtn = document.getElementById('uploadBtn');
-            const progressBar = document.getElementById('progressBar');
-            const spinner = document.getElementById('spinner');
+        document.addEventListener('DOMContentLoaded', function () {
+            let selectedFile;
+            let xhr;
 
-            form.addEventListener('submit', function(event) {
-                event.preventDefault();
+            document.getElementById('selectFile').addEventListener('click', function () {
+                document.getElementById('file').click();
+            });
 
-                const file = fileInput.files[0];
-                if (!file) {
-                    alert('Please select a file.');
-                    return;
+            document.getElementById('file').addEventListener('change', function () {
+                selectedFile = this.files[0];
+                if (selectedFile) {
+                    document.getElementById('uploadBtn').disabled = false;
+                    document.getElementById('cancel').disabled = true;
+                    document.getElementById('fileName').textContent = "Selected file: " + selectedFile.name;
                 }
+            });
 
-                // Disable the upload button and show spinner
-                uploadBtn.disabled = true;
-                spinner.style.display = 'block';
+            const dragDropArea = document.getElementById('dragDropArea');
+            dragDropArea.addEventListener('dragover', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.classList.add('dragover');
+            });
 
+            dragDropArea.addEventListener('dragleave', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.classList.remove('dragover');
+            });
+
+            dragDropArea.addEventListener('drop', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.classList.remove('dragover');
+                selectedFile = e.dataTransfer.files[0];
+                document.getElementById('file').files = e.dataTransfer.files;
+                document.getElementById('uploadBtn').disabled = false;
+                document.getElementById('cancel').disabled = true;
+                document.getElementById('fileName').textContent = "Selected file: " + selectedFile.name;
+            });
+
+            function uploadFile(file) {
                 const formData = new FormData();
                 formData.append('file', file);
 
-                const xhr = new XMLHttpRequest();
+                xhr = new XMLHttpRequest();
                 xhr.open('POST', '/MiosalonAPI/upload', true);
-
-                // Set the authorization header
                 xhr.setRequestHeader('Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4');
 
-                xhr.upload.onprogress = function(event) {
-                    if (event.lengthComputable) {
-                        const percentComplete = (event.loaded / event.total) * 100;
-                        progressBar.style.width = `${percentComplete}%`;
-                    } else {
-                        console.log('Progress event not computable.');
-                    }
-                };
+                xhr.onload = function () {
+                    // Parse the response as JSON
+                    const response = JSON.parse(xhr.responseText);
 
-                xhr.onload = function() {
+
                     if (xhr.status === 200) {
-                        alert('File uploaded successfully.');
+                        document.getElementById('uploadBtn').innerHTML = '<div class="spinner-wrapper"><span>Upload</span></div>';
+                        setTimeout(() => resetSpinner(), 3000); // Allow spinner to spin for 3 seconds after completion
+                        displaySuccess('File imported successfully');
+                        document.getElementById('fileName').textContent = "No file selected";
+                        resetForm();
                     } else {
-                        alert('File upload failed.');
+                        setTimeout(() => resetSpinner(), 2000); // Allow error message to show for 2 seconds
+                        displayError(response.error || 'An unknown error occurred.');
+                        resetForm();
                     }
-                    resetForm();
                 };
 
-                xhr.onerror = function() {
-                    alert('An error occurred during the upload.');
-                    resetForm();
+                xhr.onerror = function () {
+                    resetSpinner();
+                    displayError('Error Uploading File, Try Again');
+                    setTimeout(() => resetForm(), 3000); // Allow error message to show for 3 seconds
                 };
 
+                xhr.onabort = function () {
+                    resetSpinner();
+                    displayError('Upload Was Canceled');
+                    setTimeout(() => resetForm(), 3000); // Allow cancel message to show for 3 seconds
+                };
+
+                document.getElementById('uploadBtn').innerHTML = 'Hold on, upload in progress <div class="spinner"></div>';
+                document.querySelector('.spinner').style.display = 'inline-block'; // Show spinner
                 xhr.send(formData);
+            }
 
-                function resetForm() {
-                    uploadBtn.disabled = false;
-                    spinner.style.display = 'none';
-                    progressBar.style.width = '0%';
+            function resetSpinner() {
+                document.querySelector('.spinner').style.display = 'none'; // Hide spinner
+            }
+
+            document.getElementById('cancel').addEventListener('click', function () {
+                if (xhr) {
+                    xhr.abort();
+                }
+                resetForm();
+            });
+
+            document.getElementById('uploadBtn').addEventListener('click', function () {
+                if (selectedFile) {
+                    document.getElementById('uploadBtn').disabled = true;
+                    document.getElementById('cancel').disabled = false;
+                    uploadFile(selectedFile);
                 }
             });
+
+
+            function displayError(message) {
+                document.getElementById('fileName').textContent = ''; // Clear any previous file name
+                document.getElementById('successMessage').textContent = ''; // Clear any previous success message
+                document.getElementById('errorMessage').textContent = message; // Display the error message
+                const uploadBtn = document.getElementById('uploadBtn');
+                uploadBtn.innerHTML = 'Upload';
+                uploadBtn.disabled = true; // Disable the button so user can try again
+                resetForm();
+            }
+
+            function displaySuccess(message) {
+                document.getElementById('fileName').textContent = ''; // Clear any previous file name
+                document.getElementById('successMessage').textContent = message; // Display the success message
+                document.getElementById('errorMessage').textContent = ''; // Clear any previous error message
+                const uploadBtn = document.getElementById('uploadBtn');
+                uploadBtn.innerHTML = 'Upload';
+                uploadBtn.disabled = true; // Disable the button so user can upload another file
+                resetForm();
+            }
+
+            function resetForm() {
+                document.getElementById('form').reset(); // Clear the file input
+                document.getElementById('fileName').textContent = ''; // Clear the file name display
+                document.getElementById('uploadBtn').disabled = true; // Disable the upload button
+                document.getElementById('uploadBtn').innerHTML = 'Upload'; // Reset button text
+                document.getElementById('cancel').disabled = true; // Disable the cancel button
+                resetSpinner(); // Ensure spinner is hidden
+            }
         });
     </script>
 </body>
+
 </html>

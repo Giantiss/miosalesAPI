@@ -1,4 +1,8 @@
 <?php
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+header('Content-Type: application/json');
 require_once '../vendor/autoload.php';
 
 use App\Api\ExcelController;
@@ -9,7 +13,7 @@ $database = new Database();
 $db = $database->getConnection();
 
 // Create an instance of the controller
-$controller = new ExcelController($db, 'your_token_here');
+$controller = new ExcelController($db, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4');
 
 // Define a simple logger function for debugging
 function log_message($message) {
@@ -40,17 +44,30 @@ log_message('Path Info: ' . print_r($pathInfo, true));
 
 // Expecting the path to be ['MiosalonAPI', 'upload'] or ['MiosalonAPI', 'download']
 if ($requestMethod == 'POST' && isset($pathInfo[1]) && $pathInfo[1] == 'upload') {
-    // Handle file upload
     if (isset($_FILES['file'])) {
         $fileTmpName = $_FILES['file']['tmp_name'];
-        log_message('File upload path: ' . $fileTmpName);
+        $fileName = basename($_FILES['file']['name']);
+        $fileType = mime_content_type($fileTmpName);
+        $allowedTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel']; // MIME types for .xlsx and .xls
 
-        if (!is_uploaded_file($fileTmpName)) {
+        // Validate MIME type
+        if (!in_array($fileType, $allowedTypes)) {
             http_response_code(400);
-            $responseData = json_encode(['error' => 'Invalid file upload']);
+            $responseData = json_encode(['error' => 'Warning: Invalid file type. Only Excel files are Allowed!']);
             header('Content-Length: ' . strlen($responseData));
             echo $responseData;
-            log_message('Invalid file upload');
+            log_message('Invalid file type: ' . $fileType);
+            exit();
+        }
+
+        // Optionally, validate the file extension
+        $fileExtension = pathinfo($fileName, PATHINFO_EXTENSION);
+        if (!in_array($fileExtension, ['xlsx', 'xls'])) {
+            http_response_code(400);
+            $responseData = json_encode(['error' => 'Invalid file extension. Only .xlsx and/or .xls files are allowed.']);
+            header('Content-Length: ' . strlen($responseData));
+            echo $responseData;
+            log_message('Invalid file extension: ' . $fileExtension);
             exit();
         }
 

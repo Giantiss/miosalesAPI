@@ -22,12 +22,23 @@ class ExcelController
     public function importExcel($filePath)
     {
         $response = ['status' => 'error', 'message' => 'Unknown error'];
+        $fileName = basename($filePath); // Get the file name
+        $totalRows = 0;
+        $progressId = 0;
 
         try {
             $spreadsheet = IOFactory::load($filePath);
             $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
 
+            $totalRows = count($sheetData) - 1; // Exclude header row
+
+            // Insert initial progress record
+            $stmt = $this->db->prepare("INSERT INTO file_upload_progress (file_name, total_rows, rows_processed, progress_percentage) VALUES (?, ?, 0, 0)");
+            $stmt->execute([$fileName, $totalRows]);
+            $progressId = $this->db->lastInsertId();
+
             $rowsInserted = 0;
+
             foreach ($sheetData as $rowIndex => $row) {
                 if ($rowIndex === 1) {
                     continue; // Skip the header row
@@ -35,7 +46,6 @@ class ExcelController
 
                 $entry_date = $this->parseDate($row['F']);
                 if ($entry_date === false) {
-                    error_log("Date parsing failed for value: " . $row['F'], 3, __DIR__ . '/../../logs/debug.log');
                     continue;
                 }
 
@@ -47,7 +57,16 @@ class ExcelController
 
                 $this->insertRow($entry_date, $stylist, $service, $amount, $net, $billNumber);
                 $rowsInserted++;
+
+                // Update progress in the database
+                $progressPercentage = ($rowsInserted / $totalRows) * 100;
+                $stmt = $this->db->prepare("UPDATE file_upload_progress SET rows_processed = ?, progress_percentage = ? WHERE id = ?");
+                $stmt->execute([$rowsInserted, $progressPercentage, $progressId]);
             }
+
+            // Finalize progress
+            $stmt = $this->db->prepare("UPDATE file_upload_progress SET progress_percentage = 100, status = 'completed' WHERE id = ?");
+            $stmt->execute([$progressId]);
 
             $response = ['status' => 'success', 'rowsInserted' => $rowsInserted];
         } catch (PDOException $e) {
@@ -60,6 +79,7 @@ class ExcelController
 
         return $response;
     }
+
 
     public function exportExcel($filePath)
     {
@@ -128,7 +148,6 @@ class ExcelController
             }
             return $parsedDate->format('Y-m-d');
         } catch (Exception $e) {
-            $this->logError("Date parsing failed for value: " . $dateValue);
             return false;
         }
     }
