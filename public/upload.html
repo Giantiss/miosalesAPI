@@ -9,23 +9,27 @@
         body {
             font-family: Arial, sans-serif;
             background-color: #f9f9f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
         }
 
         .upload-container {
             max-width: 600px;
-            margin: 50px auto;
+            width: 100%;
             padding: 20px;
             background: #fff;
             border-radius: 10px;
             box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.1);
+            box-sizing: border-box;
         }
 
         .upload-container h2 {
             text-align: center;
             margin-bottom: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
         }
 
         .drag-drop-area {
@@ -35,10 +39,12 @@
             text-align: center;
             color: #aaa;
             transition: background-color 0.3s ease;
+            cursor: pointer;
         }
 
         .drag-drop-area.dragover {
             background-color: #f0f0f0;
+            border-color: #4caf50;
         }
 
         .button-wrapper {
@@ -49,15 +55,29 @@
         }
 
         .select-file-btn,
-        .upload-btn {
-            display: inline-block;
+        .upload-btn,
+        #cancel {
             padding: 10px 20px;
-            background-color: #4caf50;
-            color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            position: relative;
+        }
+
+        .select-file-btn {
+            background-color: #4caf50;
+            color: white;
+        }
+
+        .select-file-btn:hover {
+            background-color: #45a049;
+        }
+
+        .upload-btn {
+            background-color: #4caf50;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .upload-btn:disabled {
@@ -65,19 +85,20 @@
             cursor: not-allowed;
         }
 
-        .upload-btn .spinner {
-            display: none;
+        .upload-btn .spinner-wrapper {
+            display: flex;
+            align-items: center;
+        }
+
+        .spinner {
             border: 2px solid rgba(0, 0, 0, 0.1);
             border-left: 2px solid white;
             border-radius: 50%;
             width: 20px;
             height: 20px;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            margin-left: -10px;
-            margin-top: -10px;
+            margin-left: 10px;
             animation: spin 1s linear infinite;
+            display: none;
         }
 
         @keyframes spin {
@@ -93,10 +114,6 @@
         #cancel {
             background-color: #f44336;
             color: white;
-            border: none;
-            border-radius: 5px;
-            padding: 10px;
-            cursor: pointer;
         }
 
         #cancel:disabled {
@@ -104,44 +121,36 @@
             cursor: not-allowed;
         }
 
-        .button-wrapper .cancel-btn-wrapper {
-            margin-left: auto;
-        }
-
         .error-message,
         .success-message {
             margin-top: 10px;
-            width: 100%;
-            /* Ensure it takes full width */
             text-align: center;
-            /* Center text horizontally */
+            font-weight: bold;
+        }
+
+        .error-message {
+            color: red;
         }
 
         .success-message {
             color: green;
-            /*choose any color you prefer */
         }
 
-        .upload-btn .spinner-wrapper {
-            display: flex;
-            align-items: center;
-        }
-
-        .upload-btn .spinner-wrapper .spinner {
-            margin-left: 10px;
-            /* Space between text and spinner */
+        .file-name {
+            margin-top: 10px;
+            color: #333;
+            font-weight: bold;
         }
     </style>
 </head>
 
 <body>
-
     <div class="upload-container">
         <h2>Upload File</h2>
         <div class="drag-drop-area" id="dragDropArea">
             <p>Drag & Drop your file here or</p>
             <button type="button" class="select-file-btn" id="selectFile">Select File</button>
-            <p id="fileName" style="margin-top: 10px; color: #333;"></p>
+            <p id="fileName" class="file-name"></p>
         </div>
         <form id="form" enctype="multipart/form-data" style="display: none;">
             <input type="file" id="file" name="file" required>
@@ -153,13 +162,9 @@
                     <div class="spinner"></div>
                 </div>
             </button>
-            <div class="cancel-btn-wrapper">
-                <button id="cancel" disabled>Cancel</button>
-            </div>
-            <br />
+            <button id="cancel" disabled>Cancel</button>
         </div>
-        <div class="error-message" id="errorMessage" style="color: red; justify-content: center; align-items: center;">
-        </div>
+        <div class="error-message" id="errorMessage"></div>
         <div class="success-message" id="successMessage"></div>
     </div>
 
@@ -214,18 +219,16 @@
                 xhr.setRequestHeader('Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4');
 
                 xhr.onload = function () {
-                    // Parse the response as JSON
                     const response = JSON.parse(xhr.responseText);
 
-
                     if (xhr.status === 200) {
-                        document.getElementById('uploadBtn').innerHTML = '<div class="spinner-wrapper"><span>Upload</span></div>';
-                        setTimeout(() => resetSpinner(), 3000); // Allow spinner to spin for 3 seconds after completion
+                        document.getElementById('uploadBtn').innerHTML = '<div class="spinner-wrapper"><div class="spinner"></div></div>';
+                        setTimeout(() => resetSpinner(), 3000);
                         displaySuccess('File imported successfully');
                         document.getElementById('fileName').textContent = "No file selected";
                         resetForm();
                     } else {
-                        setTimeout(() => resetSpinner(), 2000); // Allow error message to show for 2 seconds
+                        setTimeout(() => resetSpinner(), 2000);
                         displayError(response.error || 'An unknown error occurred.');
                         resetForm();
                     }
@@ -234,22 +237,22 @@
                 xhr.onerror = function () {
                     resetSpinner();
                     displayError('Error Uploading File, Try Again');
-                    setTimeout(() => resetForm(), 3000); // Allow error message to show for 3 seconds
+                    setTimeout(() => resetForm(), 3000);
                 };
 
                 xhr.onabort = function () {
                     resetSpinner();
                     displayError('Upload Was Canceled');
-                    setTimeout(() => resetForm(), 3000); // Allow cancel message to show for 3 seconds
+                    setTimeout(() => resetForm(), 3000);
                 };
 
                 document.getElementById('uploadBtn').innerHTML = 'Hold on, upload in progress <div class="spinner"></div>';
-                document.querySelector('.spinner').style.display = 'inline-block'; // Show spinner
+                document.querySelector('.spinner').style.display = 'inline-block';
                 xhr.send(formData);
             }
 
             function resetSpinner() {
-                document.querySelector('.spinner').style.display = 'none'; // Hide spinner
+                document.querySelector('.spinner').style.display = 'none';
             }
 
             document.getElementById('cancel').addEventListener('click', function () {
@@ -267,34 +270,44 @@
                 }
             });
 
-
             function displayError(message) {
-                document.getElementById('fileName').textContent = ''; // Clear any previous file name
-                document.getElementById('successMessage').textContent = ''; // Clear any previous success message
-                document.getElementById('errorMessage').textContent = message; // Display the error message
-                const uploadBtn = document.getElementById('uploadBtn');
-                uploadBtn.innerHTML = 'Upload';
-                uploadBtn.disabled = true; // Disable the button so user can try again
-                resetForm();
+                document.getElementById('fileName').textContent = '';
+                document.getElementById('successMessage').textContent = '';
+                document.getElementById('errorMessage').textContent = message;
+                document.getElementById('uploadBtn').innerHTML = 'Upload';
+                document.getElementById('uploadBtn').disabled = true;
+                // No immediate resetForm call here
+
+                // Clear the error message after 5 seconds
+                setTimeout(() => {
+                    document.getElementById('errorMessage').textContent = '';
+                    resetForm();
+                }, 5000);
             }
 
             function displaySuccess(message) {
-                document.getElementById('fileName').textContent = ''; // Clear any previous file name
-                document.getElementById('successMessage').textContent = message; // Display the success message
-                document.getElementById('errorMessage').textContent = ''; // Clear any previous error message
-                const uploadBtn = document.getElementById('uploadBtn');
-                uploadBtn.innerHTML = 'Upload';
-                uploadBtn.disabled = true; // Disable the button so user can upload another file
-                resetForm();
+                document.getElementById('fileName').textContent = '';
+                document.getElementById('successMessage').textContent = message;
+                document.getElementById('errorMessage').textContent = '';
+                document.getElementById('uploadBtn').innerHTML = 'Upload';
+                document.getElementById('uploadBtn').disabled = true;
+                // No immediate resetForm call here
+
+                // Clear the success message after 5 seconds
+                setTimeout(() => {
+                    document.getElementById('successMessage').textContent = '';
+                    resetForm();
+                }, 5000);
             }
 
+
             function resetForm() {
-                document.getElementById('form').reset(); // Clear the file input
-                document.getElementById('fileName').textContent = ''; // Clear the file name display
-                document.getElementById('uploadBtn').disabled = true; // Disable the upload button
-                document.getElementById('uploadBtn').innerHTML = 'Upload'; // Reset button text
-                document.getElementById('cancel').disabled = true; // Disable the cancel button
-                resetSpinner(); // Ensure spinner is hidden
+                document.getElementById('form').reset();
+                document.getElementById('fileName').textContent = '';
+                document.getElementById('uploadBtn').disabled = true;
+                document.getElementById('uploadBtn').innerHTML = 'Upload';
+                document.getElementById('cancel').disabled = true;
+                resetSpinner();
             }
         });
     </script>
