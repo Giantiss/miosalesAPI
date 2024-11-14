@@ -4,7 +4,7 @@
 This API allows users to upload an Excel file, which is then processed row by row. Each row is validated, and valid rows are inserted into a MySQL database. The API supports Bearer token authentication and returns detailed validation errors for any invalid rows.
 
 ## Features
-- **File Upload:** Accepts Excel files (`.xlsx`, `.xls`).
+- **File Upload:** Accepts Excel files (`.xlsx`, `.xls`,`.csv`).
 - **Row Validation:** Validates each row according to predefined criteria.
 - **Database Insertion:** Inserts valid rows into the MySQL database.
 - **Error Reporting:** Provides detailed error messages for invalid rows.

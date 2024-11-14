@@ -16,7 +16,8 @@ $db = $database->getConnection();
 $controller = new ExcelController($db, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4');
 
 // Define a simple logger function for debugging
-function log_message($message) {
+function log_message($message)
+{
     file_put_contents('../logs/debug.log', date('Y-m-d H:i:s') . ' - ' . $message . PHP_EOL, FILE_APPEND);
 }
 
@@ -47,20 +48,8 @@ if ($requestMethod == 'POST' && isset($pathInfo[1]) && $pathInfo[1] == 'upload')
     if (isset($_FILES['file'])) {
         $fileTmpName = $_FILES['file']['tmp_name'];
         $fileName = basename($_FILES['file']['name']);
-        $fileType = mime_content_type($fileTmpName);
-        $allowedTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel']; // MIME types for .xlsx and .xls
-
-        // Validate MIME type
-        if (!in_array($fileType, $allowedTypes)) {
-            http_response_code(400);
-            $responseData = json_encode(['error' => 'Warning: Invalid file type. Only Excel files are Allowed!']);
-            header('Content-Length: ' . strlen($responseData));
-            echo $responseData;
-            log_message('Invalid file type: ' . $fileType);
-            exit();
-        }
-
-        // Optionally, validate the file extension
+        
+        // Check file extension
         $fileExtension = pathinfo($fileName, PATHINFO_EXTENSION);
         if (!in_array($fileExtension, ['xlsx', 'xls'])) {
             http_response_code(400);
@@ -70,9 +59,22 @@ if ($requestMethod == 'POST' && isset($pathInfo[1]) && $pathInfo[1] == 'upload')
             log_message('Invalid file extension: ' . $fileExtension);
             exit();
         }
-
-        $response = $controller->importExcel($fileTmpName);
         
+        // Attempt to open the file with PhpSpreadsheet
+        try {
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($fileTmpName);
+        } catch (Exception $e) {
+            http_response_code(400);
+            $responseData = json_encode(['error' => 'Warning: Invalid file type. Only Excel files are allowed!']);
+            header('Content-Length: ' . strlen($responseData));
+            echo $responseData;
+            log_message('Invalid file type or corrupted file: ' . $e->getMessage());
+            exit();
+        }
+        
+        // If the file was successfully loaded, proceed with your import logic
+        $response = $controller->importExcel($fileTmpName);
+
         if ($response['status'] === 'success') {
             http_response_code(200);
             $responseData = json_encode(['message' => 'File imported successfully']);
@@ -93,29 +95,6 @@ if ($requestMethod == 'POST' && isset($pathInfo[1]) && $pathInfo[1] == 'upload')
         echo $responseData;
         log_message('No file uploaded');
     }
-} elseif ($requestMethod == 'GET' && isset($pathInfo[1]) && $pathInfo[1] == 'download') {
-    // Handle file download
-    $filePath = __DIR__ . '/downloads/miosales_export.xlsx';
-
-    $response = $controller->exportExcel($filePath);
-
-    if ($response['status'] === 'success') {
-        $fileSize = filesize($filePath);
-
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment; filename="miosales_export.xlsx"');
-        header('Content-Length: ' . $fileSize);
-
-        readfile($filePath);
-        log_message('File exported successfully and downloaded');
-        exit();
-    } else {
-        http_response_code(400);
-        $responseData = json_encode(['error' => $response['message']]);
-        header('Content-Length: ' . strlen($responseData));
-        echo $responseData;
-        log_message('File export failed: ' . $response['message']);
-    }
 } else {
     http_response_code(400);
     $responseData = json_encode(['error' => 'Invalid request']);
@@ -123,3 +102,4 @@ if ($requestMethod == 'POST' && isset($pathInfo[1]) && $pathInfo[1] == 'upload')
     echo $responseData;
     log_message('Invalid request method or path');
 }
+
