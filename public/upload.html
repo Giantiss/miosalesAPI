@@ -141,6 +141,27 @@
             color: #333;
             font-weight: bold;
         }
+
+        .progress-bar {
+            width: 100%;
+            background-color: #f3f3f3;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .progress-bar-fill {
+            height: 20px;
+            background-color: #4caf50;
+            width: 0;
+            transition: width 0.5s;
+        }
+
+        .progress-text {
+            text-align: center;
+            margin-top: 10px;
+            font-weight: bold;
+        }
     </style>
 </head>
 
@@ -164,6 +185,10 @@
             </button>
             <button id="cancel" disabled>Cancel</button>
         </div>
+        <div class="progress-bar" id="progressBar">
+            <div class="progress-bar-fill" id="progressBarFill"></div>
+        </div>
+        <div class="progress-text" id="progressText"></div>
         <div class="error-message" id="errorMessage"></div>
         <div class="success-message" id="successMessage"></div>
     </div>
@@ -215,34 +240,40 @@
                 formData.append('file', file);
 
                 xhr = new XMLHttpRequest();
-                xhr.open('POST', '/MiosalonAPI/upload', true);
+                xhr.open('POST', '/upload', true);
                 xhr.setRequestHeader('Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4');
 
-                xhr.onload = function () {
-                    const response = JSON.parse(xhr.responseText);
+                xhr.upload.onprogress = function (e) {
+                    if (e.lengthComputable) {
+                        const percentComplete = (e.loaded / e.total) * 100;
+                        document.getElementById('progressBarFill').style.width = percentComplete + '%';
+                        document.getElementById('progressText').textContent = Math.round(percentComplete) + '% uploaded';
+                    }
+                };
 
+                xhr.onload = function () {
                     if (xhr.status === 200) {
                         document.getElementById('uploadBtn').innerHTML = '<div class="spinner-wrapper"><div class="spinner"></div></div>';
                         setTimeout(() => resetSpinner(), 3000);
-                        displaySuccess('File imported successfully');
+                        displaySuccess('File uploaded successfully');
                         document.getElementById('fileName').textContent = "No file selected";
                         resetForm();
                     } else {
                         setTimeout(() => resetSpinner(), 2000);
-                        displayError(response.error || 'An unknown error occurred.');
+                        displayError('Upload failed. Please try again.');
                         resetForm();
                     }
                 };
 
                 xhr.onerror = function () {
                     resetSpinner();
-                    displayError('Error Uploading File, Try Again');
+                    displayError('An error occurred during the upload. Please try again.');
                     setTimeout(() => resetForm(), 3000);
                 };
 
                 xhr.onabort = function () {
                     resetSpinner();
-                    displayError('Upload Was Canceled');
+                    displayError('Upload was canceled.');
                     setTimeout(() => resetForm(), 3000);
                 };
 
@@ -276,7 +307,6 @@
                 document.getElementById('errorMessage').textContent = message;
                 document.getElementById('uploadBtn').innerHTML = 'Upload';
                 document.getElementById('uploadBtn').disabled = true;
-                // No immediate resetForm call here
 
                 // Clear the error message after 5 seconds
                 setTimeout(() => {
@@ -291,7 +321,6 @@
                 document.getElementById('errorMessage').textContent = '';
                 document.getElementById('uploadBtn').innerHTML = 'Upload';
                 document.getElementById('uploadBtn').disabled = true;
-                // No immediate resetForm call here
 
                 // Clear the success message after 5 seconds
                 setTimeout(() => {
@@ -300,7 +329,6 @@
                 }, 5000);
             }
 
-
             function resetForm() {
                 document.getElementById('form').reset();
                 document.getElementById('fileName').textContent = '';
@@ -308,6 +336,8 @@
                 document.getElementById('uploadBtn').innerHTML = 'Upload';
                 document.getElementById('cancel').disabled = true;
                 resetSpinner();
+                document.getElementById('progressBarFill').style.width = '0%';
+                document.getElementById('progressText').textContent = '';
             }
         });
     </script>

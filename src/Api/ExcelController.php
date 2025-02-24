@@ -23,20 +23,47 @@ class ExcelController
 
     public function importExcel($filePath)
     {
+        // Logger function for debugging
+        function log_message($message)
+        {
+            file_put_contents('../logs/debug.log', date('Y-m-d H:i:s') . ' - ' . $message . PHP_EOL, FILE_APPEND);
+        }
+
+        log_message('Starting importExcel method');
+
         $response = ['status' => 'error', 'message' => 'Unknown error'];
         $fileName = basename($filePath); // Get the file name
         $totalRows = 0;
         $progressId = 0;
 
+        // Check if file exists
+        if (!file_exists($filePath)) {
+            $response['message'] = 'File not found.';
+            return $response;
+        }
+
+        // MIME type check
+        $mimeType = mime_content_type($filePath);
+        log_message('Detected MIME type: ' . $mimeType);
+
+        // Allowed MIME types
+        $allowedMimeTypes = [
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+            'application/vnd.ms-excel' // .xls
+        ];
+
+        // Check MIME type instead of file extension
+        if (!in_array($mimeType, $allowedMimeTypes)) {
+            $response['message'] = 'Invalid file type. Only .xlsx and .xls files are allowed.';
+            return $response;
+        }
+
         try {
-            // Check if file exists
-            if (!file_exists($filePath)) {
-                $response['message'] = 'File not found.';
-                return $response;
-            }
+            log_message('File exists and MIME type is valid: ' . $filePath);
 
             // Load the spreadsheet
             $spreadsheet = IOFactory::load($filePath);
+            log_message('Spreadsheet loaded successfully');
             $sheet = $spreadsheet->getActiveSheet();
             $sheetData = $sheet->toArray(null, true, true, true);
 
@@ -77,6 +104,12 @@ class ExcelController
                 $service_name = $row['D']; // Item column (use this to find service ID)
                 $amount = $this->parseAmount($row['Q']); // Total sales column
                 $net = $amount * 0.86; // Net sales column, adjusted to 86%
+
+                // Basic validation for required fields
+                if (empty($reciept_no) || empty($stylist_name) || empty($service_name) || empty($amount)) {
+                    $response['message'] = "Missing required fields in row $rowIndex.";
+                    return $response;
+                }
 
                 // Find stylist ID based on stylist name
                 try {
@@ -126,7 +159,31 @@ class ExcelController
     }
 
 
-    // Methods to find the corresponding IDs for customer, stylist, and service
+    public function validateData()
+    {
+        $response = ['status' => 'error', 'message' => 'Unknown error'];
+
+        try {
+            // SQL query to validate data in uploadData table
+            $stmt = $this->db->prepare("SELECT reciept_no, entry_date, details FROM uploadData WHERE is_valid = 0");
+            $stmt->execute();
+            $invalidRows = $stmt->fetchAll();
+
+            if (empty($invalidRows)) {
+                $response = ['status' => 'success', 'message' => 'All data is valid.'];
+            } else {
+                $response = ['status' => 'error', 'invalidRows' => $invalidRows];
+            }
+        } catch (PDOException $e) {
+            $response['message'] = 'Database error occurred: ' . $e->getMessage();
+            $this->logError($e->getMessage());
+        } catch (Exception $e) {
+            $response['message'] = 'An error occurred while validating the data: ' . $e->getMessage();
+            $this->logError($e->getMessage());
+        }
+
+        return $response;
+    }
 
     private function getStylistIDByName($stylist_name)
     {
@@ -157,17 +214,17 @@ class ExcelController
         try {
             // Attempt to parse with two-digit year and time format
             $parsedDate = DateTime::createFromFormat('d/m/y H:i:s', $dateValue);
-    
+
             // Check if parsing failed, then try with four-digit year
             if ($parsedDate === false) {
                 $parsedDate = DateTime::createFromFormat('d/m/Y H:i:s', $dateValue);
             }
-    
+
             // If both parsing attempts fail, throw an exception
             if ($parsedDate === false) {
                 throw new Exception("Invalid date format");
             }
-    
+
             // Return the date in 'Y-m-d' format
             return $parsedDate->format('Y-m-d');
         } catch (Exception $e) {
@@ -176,9 +233,6 @@ class ExcelController
             return false;
         }
     }
-    
-
-
 
     private function parseAmount($amount)
     {
@@ -239,10 +293,9 @@ class ExcelController
                 // Handle successful query execution
                 echo "Data inserted successfully!";
             }
-            
+
             // Commit the transaction
             $this->db->commit();
-            
         } catch (PDOException $e) {
             // Log the error and roll back the transaction
             $this->db->rollBack();
