@@ -13,6 +13,7 @@ This API allows users to upload an Excel file, which is then processed row by ro
 - **Rate Limiting:** Limits the number of file uploads per user to prevent abuse.
 - **File Size Limit:** Enforces a maximum file size for uploads to ensure performance.
 - **Data Sanitization:** Sanitizes input data to prevent SQL injection and other security issues.
+- **Duplicate Detection:** Identifies and skips duplicate rows during the upload process.
 
 ## Technologies
 - **Backend Language:** PHP 7.2
@@ -24,10 +25,24 @@ This API allows users to upload an Excel file, which is then processed row by ro
 - **Rate Limiting:** Custom middleware for rate limiting
 - **Data Sanitization:** PHP's filter functions and prepared statements
 
+## Solutions to Common Issues
+
+### Identifying Duplicates
+Duplicates are identified by checking unique fields in each row against existing records in the database. If a duplicate is found, the row is skipped, and an error message is logged.
+
+### Data Sanitization
+All input data is sanitized using PHP's filter functions and prepared statements to prevent SQL injection and other security vulnerabilities.
+
+### Error Reporting
+Detailed error messages are provided for each invalid row. These messages include the specific validation error and the row number, making it easy to identify and correct issues.
+
+### File Upload Logging
+All file upload activities and errors are logged using Monolog. This includes the timestamp of the upload, the user who uploaded the file, and any errors encountered during processing.
+
 ## API Endpoints
 
 ### Upload File
-- **URL:** `/index.php`
+- **URL:** `/index.php/upload`
 - **Method:** `POST`
 - **Content-Type:** `multipart/form-data`
 - **Headers:**
@@ -39,7 +54,9 @@ This API allows users to upload an Excel file, which is then processed row by ro
 - **Success:**
   ```json
   {
-    "message": "File processed successfully"
+    "success": true,
+    "message": "File uploaded successfully. Ready for processing.",
+    "jobId": "unique_job_id"
   }
   ```
 - **Error:**
@@ -49,8 +66,65 @@ This API allows users to upload an Excel file, which is then processed row by ro
   }
   ```
 
-### Get Upload Logs
-- **URL:** `/logs.php`
+### Check Duplicate
+- **URL:** `/index.php/check-duplicate`
+- **Method:** `POST`
+- **Content-Type:** `application/json`
+- **Headers:**
+  - `Authorization: Bearer <token>`
+- **Body:**
+  ```json
+  {
+    "hash": "file_hash"
+  }
+  ```
+
+#### Response
+- **Success:**
+  ```json
+  {
+    "isDuplicate": false
+  }
+  ```
+- **Error:**
+  ```json
+  {
+    "error": "Detailed error message"
+  }
+  ```
+
+### Start Processing
+- **URL:** `/index.php/start-processing`
+- **Method:** `POST`
+- **Content-Type:** `application/json`
+- **Headers:**
+  - `Authorization: Bearer <token>`
+- **Body:**
+  ```json
+  {
+    "jobId": "unique_job_id"
+  }
+  ```
+
+#### Response
+- **Success:**
+  ```json
+  {
+    "success": true,
+    "message": "Processing started.",
+    "jobId": "unique_job_id",
+    "output": "Processing output"
+  }
+  ```
+- **Error:**
+  ```json
+  {
+    "error": "Detailed error message"
+  }
+  ```
+
+### Check Status
+- **URL:** `/index.php/check-status`
 - **Method:** `GET`
 - **Headers:**
   - `Authorization: Bearer <token>`
@@ -59,13 +133,7 @@ This API allows users to upload an Excel file, which is then processed row by ro
 - **Success:**
   ```json
   {
-    "logs": [
-      {
-        "timestamp": "2023-10-01T12:00:00Z",
-        "message": "File uploaded successfully"
-      },
-      // ...more logs...
-    ]
+    "status": "Processing status details"
   }
   ```
 - **Error:**
@@ -75,26 +143,3 @@ This API allows users to upload an Excel file, which is then processed row by ro
   }
   ```
 
-### Rate Limit Status
-- **URL:** `/rate_limit.php`
-- **Method:** `GET`
-- **Headers:**
-  - `Authorization: Bearer <token>`
-
-#### Response
-- **Success:**
-  ```json
-  {
-    "rate_limit": {
-      "limit": 10,
-      "remaining": 5,
-      "reset": "2023-10-01T12:00:00Z"
-    }
-  }
-  ```
-- **Error:**
-  ```json
-  {
-    "error": "Detailed error message"
-  }
-  ```
