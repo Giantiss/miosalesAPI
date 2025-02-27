@@ -1,0 +1,12 @@
+/vendor/
+/node_modules/
+.env
+.vscode
+.DS_Store
+.idea/
+/*.log
+*.log
+*.cache
+*.tmp
+*.swp
+composer.lock

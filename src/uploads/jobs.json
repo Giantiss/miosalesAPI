@@ -1,0 +1,22 @@
+[
+    {
+        "id": "67c0c70943a35",
+        "file": "1740687113_report_sales-log-detail_2024-11-02 fresha.xlsx",
+        "status": "processed",
+        "uploaded_at": "2025-02-27T22:11:53+02:00",
+        "processed_at": "2025-02-27T22:11:57+02:00"
+    },
+    {
+        "id": "67c0c73eac9d8",
+        "file": "1740687166_report_sales-log-detail_2024-11-02 fresha.xlsx",
+        "status": "uploaded",
+        "uploaded_at": "2025-02-27T22:12:46+02:00"
+    },
+    {
+        "id": "67c0c85c4032e",
+        "file": "1740687452_orders.xls",
+        "status": "processed",
+        "uploaded_at": "2025-02-27T22:17:32+02:00",
+        "processed_at": "2025-02-27T22:17:35+02:00"
+    }
+]

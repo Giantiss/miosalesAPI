@@ -21,12 +21,12 @@ class ExcelController
         $this->token = $token;
     }
 
-    public function importExcel($filePath)
+    public function importExcel($filePath, $batchSize = 100)
     {
         // Logger function for debugging
         function log_message($message)
         {
-            file_put_contents('../logs/debug.log', date('Y-m-d H:i:s') . ' - ' . $message . PHP_EOL, FILE_APPEND);
+            file_put_contents('../logs/database_insert.log', date('Y-m-d H:i:s') . ' - ' . $message . PHP_EOL, FILE_APPEND);
         }
 
         log_message('Starting importExcel method');
@@ -75,6 +75,7 @@ class ExcelController
             $stmt->execute([$fileName, $totalRows]);
 
             $rowsInserted = 0;
+            $batchData = [];
 
             foreach ($sheetData as $rowIndex => $row) {
                 if ($rowIndex === 1) {
@@ -135,15 +136,21 @@ class ExcelController
                     'v_account' => null // Assuming you have a logic for this value
                 ];
 
-                // Insert the row into the service_sheet table
-                try {
-                    $this->insertRow($rowData);
-                } catch (Exception $e) {
-                    $response['message'] = "Error inserting row $rowIndex: " . $e->getMessage();
-                    return $response;
-                }
+                // Add row data to batch
+                $batchData[] = $rowData;
 
-                $rowsInserted++;
+                // Insert batch if batch size is reached
+                if (count($batchData) >= $batchSize) {
+                    $this->insertBatch($batchData);
+                    $rowsInserted += count($batchData);
+                    $batchData = []; // Reset batch data
+                }
+            }
+
+            // Insert any remaining rows in the batch
+            if (!empty($batchData)) {
+                $this->insertBatch($batchData);
+                $rowsInserted += count($batchData);
             }
 
             $response = ['status' => 'success', 'rowsInserted' => $rowsInserted];
@@ -158,6 +165,63 @@ class ExcelController
         return $response;
     }
 
+    private function insertBatch($batchData)
+    {
+        try {
+            // Ensure $batchData is valid
+            if (empty($batchData)) {
+                throw new Exception("Invalid or empty data provided for batch insert.");
+            }
+
+            // Log the data being inserted to verify it
+            error_log("Inserting Batch: " . print_r($batchData, true), 3, __DIR__ . '/../../logs/debug.log');
+
+            // Start a transaction
+            $this->db->beginTransaction();
+
+            // Prepare the query with placeholders for multiple rows
+            $query = "INSERT INTO service_sheet (entry_date, reciept_no, stylist, service, amount, net, spa_transaction, expunged, v_account) VALUES ";
+            $placeholders = [];
+            $params = [];
+
+            foreach ($batchData as $rowData) {
+                $placeholders[] = "(?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $params = array_merge($params, [
+                    $rowData['entry_date'],
+                    $rowData['reciept_no'],
+                    $rowData['stylist'],
+                    $rowData['service'],
+                    $rowData['amount'],
+                    $rowData['net'],
+                    $rowData['spa_transaction'],
+                    $rowData['expunged'],
+                    $rowData['v_account']
+                ]);
+            }
+
+            $query .= implode(", ", $placeholders);
+
+            // Log the query and parameters to verify they are being passed correctly
+            error_log("Executing Query: $query with Params: " . print_r($params, true), 3, __DIR__ . '/../../logs/debug.log');
+
+            // Execute the insert query
+            $stmt = $this->db->prepare($query);
+            $stmt->execute($params);
+
+            // Commit the transaction
+            $this->db->commit();
+        } catch (PDOException $e) {
+            // Log the error and roll back the transaction
+            $this->db->rollBack();
+            $this->logError("Database batch insert failed: " . $e->getMessage());
+            throw new Exception("Database batch insert failed: " . $e->getMessage());
+        } catch (Exception $e) {
+            // Catch any other exceptions and roll back
+            $this->db->rollBack();
+            $this->logError("Error: " . $e->getMessage());
+            throw new Exception("Error: " . $e->getMessage());
+        }
+    }
 
     public function validateData()
     {

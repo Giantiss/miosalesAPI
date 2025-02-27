@@ -82,6 +82,7 @@ class ComposerStaticInitd6137c865cc253c17382fad2987b5fda
         'P' => 
         array (
             'Psr\\SimpleCache\\' => 16,
+            'Psr\\Log\\' => 8,
             'Psr\\Http\\Message\\' => 17,
             'Psr\\Http\\Client\\' => 16,
             'PhpOffice\\PhpSpreadsheet\\' => 25,
@@ -89,6 +90,7 @@ class ComposerStaticInitd6137c865cc253c17382fad2987b5fda
         'M' => 
         array (
             'MyCLabs\\Enum\\' => 13,
+            'Monolog\\' => 8,
             'Matrix\\' => 7,
         ),
         'D' => 
@@ -121,10 +123,14 @@ class ComposerStaticInitd6137c865cc253c17382fad2987b5fda
         array (
             0 => __DIR__ . '/..' . '/psr/simple-cache/src',
         ),
+        'Psr\\Log\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/psr/log/Psr/Log',
+        ),
         'Psr\\Http\\Message\\' => 
         array (
-            0 => __DIR__ . '/..' . '/psr/http-message/src',
-            1 => __DIR__ . '/..' . '/psr/http-factory/src',
+            0 => __DIR__ . '/..' . '/psr/http-factory/src',
+            1 => __DIR__ . '/..' . '/psr/http-message/src',
         ),
         'Psr\\Http\\Client\\' => 
         array (
@@ -137,6 +143,10 @@ class ComposerStaticInitd6137c865cc253c17382fad2987b5fda
         'MyCLabs\\Enum\\' => 
         array (
             0 => __DIR__ . '/..' . '/myclabs/php-enum/src',
+        ),
+        'Monolog\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/monolog/monolog/src/Monolog',
         ),
         'Matrix\\' => 
         array (

@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>File Upload</title>
+    <script src="https://cdn.jsdelivr.net/npm/spark-md5/spark-md5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -68,64 +70,20 @@
             color: white;
         }
 
-        .select-file-btn:hover {
-            background-color: #45a049;
-        }
-
         .upload-btn {
             background-color: #4caf50;
             color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
 
-        .upload-btn:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-
-        .upload-btn .spinner-wrapper {
-            display: flex;
-            align-items: center;
-        }
-
-        .spinner {
-            border: 2px solid rgba(0, 0, 0, 0.1);
-            border-left: 2px solid white;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            margin-left: 10px;
-            animation: spin 1s linear infinite;
-            display: none;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        #cancel {
-            background-color: #f44336;
-            color: white;
-        }
-
+        .upload-btn:disabled,
         #cancel:disabled {
             background-color: #ccc;
             cursor: not-allowed;
         }
 
-        .error-message,
-        .success-message {
-            margin-top: 10px;
-            text-align: center;
-            font-weight: bold;
+        #cancel {
+            background-color: #f44336;
+            color: white;
         }
 
         .error-message {
@@ -136,32 +94,6 @@
             color: green;
         }
 
-        .file-name {
-            margin-top: 10px;
-            color: #333;
-            font-weight: bold;
-        }
-
-        .progress-bar {
-            width: 100%;
-            background-color: #f3f3f3;
-            border-radius: 5px;
-            overflow: hidden;
-            margin-top: 20px;
-        }
-
-        .progress-bar-fill {
-            height: 20px;
-            background-color: #4caf50;
-            width: 0;
-            transition: width 0.5s;
-        }
-
-        .progress-text {
-            text-align: center;
-            margin-top: 10px;
-            font-weight: bold;
-        }
     </style>
 </head>
 
@@ -171,175 +103,265 @@
         <div class="drag-drop-area" id="dragDropArea">
             <p>Drag & Drop your file here or</p>
             <button type="button" class="select-file-btn" id="selectFile">Select File</button>
-            <p id="fileName" class="file-name"></p>
+            <p id="fileName" class="file-name">No file selected</p>
         </div>
-        <form id="form" enctype="multipart/form-data" style="display: none;">
-            <input type="file" id="file" name="file" required>
-        </form>
+        <input type="file" id="file" style="display: none;" accept=".xlsx,.xls">
         <div class="button-wrapper">
-            <button type="button" class="upload-btn" id="uploadBtn" disabled>
-                <div class="spinner-wrapper">
-                    <span>Upload</span>
-                    <div class="spinner"></div>
-                </div>
-            </button>
+            <button type="button" class="upload-btn" id="uploadBtn" disabled>Upload</button>
             <button id="cancel" disabled>Cancel</button>
         </div>
-        <div class="progress-bar" id="progressBar">
-            <div class="progress-bar-fill" id="progressBarFill"></div>
-        </div>
-        <div class="progress-text" id="progressText"></div>
         <div class="error-message" id="errorMessage"></div>
         <div class="success-message" id="successMessage"></div>
     </div>
-
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            let selectedFile;
-            let xhr;
+        const fileInput = document.getElementById('file');
+        const dragDropArea = document.getElementById('dragDropArea');
+        const selectFileBtn = document.getElementById('selectFile');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const proceedBtn = document.getElementById('proceedBtn');
+        const cancelBtn = document.getElementById('cancel');
+        const fileNameDisplay = document.getElementById('fileName');
+        let selectedFile = null;
+        let fileHash = null;  // Store the hash for reuse
 
-            document.getElementById('selectFile').addEventListener('click', function () {
-                document.getElementById('file').click();
-            });
+        uploadBtn.disabled = true;
+        cancelBtn.disabled = true;
 
-            document.getElementById('file').addEventListener('change', function () {
-                selectedFile = this.files[0];
-                if (selectedFile) {
-                    document.getElementById('uploadBtn').disabled = false;
-                    document.getElementById('cancel').disabled = true;
-                    document.getElementById('fileName').textContent = "Selected file: " + selectedFile.name;
-                }
-            });
+        // Event Listener for File Selection
+        selectFileBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
 
-            const dragDropArea = document.getElementById('dragDropArea');
-            dragDropArea.addEventListener('dragover', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                this.classList.add('dragover');
-            });
+        // Event Listener for Input Change
+        fileInput.addEventListener('change', (event) => {
+            handleFileSelection(event.target.files[0]);
+        });
 
-            dragDropArea.addEventListener('dragleave', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                this.classList.remove('dragover');
-            });
+        // Event Listener for Drag and Drop
+        dragDropArea.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            dragDropArea.classList.add('dragover');
+        });
 
-            dragDropArea.addEventListener('drop', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                this.classList.remove('dragover');
-                selectedFile = e.dataTransfer.files[0];
-                document.getElementById('file').files = e.dataTransfer.files;
-                document.getElementById('uploadBtn').disabled = false;
-                document.getElementById('cancel').disabled = true;
-                document.getElementById('fileName').textContent = "Selected file: " + selectedFile.name;
-            });
+        dragDropArea.addEventListener('dragleave', () => {
+            dragDropArea.classList.remove('dragover');
+        });
 
-            function uploadFile(file) {
-                const formData = new FormData();
-                formData.append('file', file);
+        dragDropArea.addEventListener('drop', (event) => {
+            event.preventDefault();
+            dragDropArea.classList.remove('dragover');
+            handleFileSelection(event.dataTransfer.files[0]);
+        });
 
-                xhr = new XMLHttpRequest();
-                xhr.open('POST', '/upload', true);
-                xhr.setRequestHeader('Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4');
+        // Centralized File Selection Handler
+        function handleFileSelection(file) {
+            if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
+                selectedFile = file;
+                fileNameDisplay.textContent = selectedFile.name;
+                uploadBtn.disabled = false;
 
-                xhr.upload.onprogress = function (e) {
-                    if (e.lengthComputable) {
-                        const percentComplete = (e.loaded / e.total) * 100;
-                        document.getElementById('progressBarFill').style.width = percentComplete + '%';
-                        document.getElementById('progressText').textContent = Math.round(percentComplete) + '% uploaded';
-                    }
+                // Generate the hash
+                const fileReader = new FileReader();
+                fileReader.onload = function (e) {
+                    const arrayBuffer = e.target.result;
+                    const spark = new SparkMD5.ArrayBuffer();
+                    spark.append(arrayBuffer);
+                    fileHash = spark.end();
+                    console.log("File Hash:", fileHash);
                 };
-
-                xhr.onload = function () {
-                    if (xhr.status === 200) {
-                        document.getElementById('uploadBtn').innerHTML = '<div class="spinner-wrapper"><div class="spinner"></div></div>';
-                        setTimeout(() => resetSpinner(), 3000);
-                        displaySuccess('File uploaded successfully');
-                        document.getElementById('fileName').textContent = "No file selected";
-                        resetForm();
-                    } else {
-                        setTimeout(() => resetSpinner(), 2000);
-                        displayError('Upload failed. Please try again.');
-                        resetForm();
-                    }
-                };
-
-                xhr.onerror = function () {
-                    resetSpinner();
-                    displayError('An error occurred during the upload. Please try again.');
-                    setTimeout(() => resetForm(), 3000);
-                };
-
-                xhr.onabort = function () {
-                    resetSpinner();
-                    displayError('Upload was canceled.');
-                    setTimeout(() => resetForm(), 3000);
-                };
-
-                document.getElementById('uploadBtn').innerHTML = 'Hold on, upload in progress <div class="spinner"></div>';
-                document.querySelector('.spinner').style.display = 'inline-block';
-                xhr.send(formData);
+                fileReader.readAsArrayBuffer(selectedFile);
+            } else {
+                fileNameDisplay.textContent = 'Invalid file type. Only XLSX or XLS allowed';
+                uploadBtn.disabled = true;
+                selectedFile = null;
             }
+            cancelBtn.disabled = true;
+        }
 
-            function resetSpinner() {
-                document.querySelector('.spinner').style.display = 'none';
-            }
+        // Upload Button Click Event
+        uploadBtn.addEventListener('click', () => {
+            if (selectedFile && fileHash) {
+                uploadBtn.disabled = true;
+                uploadBtn.textContent = 'Uploading...';
+                cancelBtn.disabled = false;
 
-            document.getElementById('cancel').addEventListener('click', function () {
-                if (xhr) {
-                    xhr.abort();
-                }
-                resetForm();
-            });
+                // Check for duplicates with the hash
+                fetch('/check-duplicate', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ hash: fileHash })
+                }).then(response => response.json())
+                    .then(data => {
+                        console.log('Duplicate Check Result:', data);
+                        if (data.isDuplicate) {
+                            Swal.fire({
+                                title: 'Duplicate file detected',
+                                text: 'Do you want to proceed with the upload?',
+                                icon: 'warning',
+                                showCancelButton: true,
+                                confirmButtonText: 'Yes, upload it!',
+                                cancelButtonText: 'No, cancel'
+                            }).then((result) => {
+                                if (result.isConfirmed) {
+                                    // Proceed with upload and send flag to override duplicate check
+                                    const formData = new FormData();
+                                    formData.append('file', selectedFile);
+                                    formData.append('allowDuplicate', 'true'); // Add flag here
 
-            document.getElementById('uploadBtn').addEventListener('click', function () {
-                if (selectedFile) {
-                    document.getElementById('uploadBtn').disabled = true;
-                    document.getElementById('cancel').disabled = false;
-                    uploadFile(selectedFile);
-                }
-            });
+                                    fetch('/upload', {
+                                        headers: {
+                                            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4'
+                                        },
+                                        method: 'POST',
+                                        body: formData
+                                    }).then(response => response.json())
+                                        .then(data => {
+                                            if (data.success) {
+                                                Swal.fire({
+                                                    title: 'Success',
+                                                    text: data.message,
+                                                    icon: 'success',
+                                                    showCancelButton: true,
+                                                    confirmButtonText: 'Proceed to Insert',
+                                                    cancelButtonText: 'Close'
+                                                }).then((result) => {
+                                                    if (result.isConfirmed) {
+                                                        startProcessing(data.jobId);
+                                                    } else {
+                                                        resetUploadState();
+                                                    }
+                                                });
+                                            } else {
+                                                Swal.fire('Error', 'Upload failed.', 'error');
+                                                uploadBtn.textContent = 'Upload was not completed';
+                                            }
+                                        }).catch(err => {
+                                            console.error('Upload Error:', err);
+                                            Swal.fire('Error', 'An error occurred during upload.', 'error');
+                                            resetUploadState();
+                                        });
+                                } else {
+                                    // User canceled the upload
+                                    resetUploadState();
+                                }
+                            });
+                        } else {
+                            // Proceed with upload
+                            const formData = new FormData();
+                            formData.append('file', selectedFile);
 
-            function displayError(message) {
-                document.getElementById('fileName').textContent = '';
-                document.getElementById('successMessage').textContent = '';
-                document.getElementById('errorMessage').textContent = message;
-                document.getElementById('uploadBtn').innerHTML = 'Upload';
-                document.getElementById('uploadBtn').disabled = true;
-
-                // Clear the error message after 5 seconds
-                setTimeout(() => {
-                    document.getElementById('errorMessage').textContent = '';
-                    resetForm();
-                }, 5000);
-            }
-
-            function displaySuccess(message) {
-                document.getElementById('fileName').textContent = '';
-                document.getElementById('successMessage').textContent = message;
-                document.getElementById('errorMessage').textContent = '';
-                document.getElementById('uploadBtn').innerHTML = 'Upload';
-                document.getElementById('uploadBtn').disabled = true;
-
-                // Clear the success message after 5 seconds
-                setTimeout(() => {
-                    document.getElementById('successMessage').textContent = '';
-                    resetForm();
-                }, 5000);
-            }
-
-            function resetForm() {
-                document.getElementById('form').reset();
-                document.getElementById('fileName').textContent = '';
-                document.getElementById('uploadBtn').disabled = true;
-                document.getElementById('uploadBtn').innerHTML = 'Upload';
-                document.getElementById('cancel').disabled = true;
-                resetSpinner();
-                document.getElementById('progressBarFill').style.width = '0%';
-                document.getElementById('progressText').textContent = '';
+                            fetch('/upload', {
+                                headers: {
+                                    'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4'
+                                },
+                                method: 'POST',
+                                body: formData
+                            }).then(response => response.json())
+                                .then(data => {
+                                    if (data.success) {
+                                        Swal.fire({
+                                            title: 'Success',
+                                            text: data.message,
+                                            icon: 'success',
+                                            showCancelButton: true,
+                                            confirmButtonText: 'Proceed to Insert',
+                                            cancelButtonText: 'Close'
+                                        }).then((result) => {
+                                            if (result.isConfirmed) {
+                                                startProcessing(data.jobId);
+                                            } else {
+                                                resetUploadState();
+                                            }
+                                        });
+                                    } else {
+                                        Swal.fire('Error', 'Upload failed.', 'error');
+                                        uploadBtn.textContent = 'Upload was not completed';
+                                    }
+                                }).catch(err => {
+                                    console.error('Upload Error:', err);
+                                    Swal.fire('Error', 'An error occurred during upload.', 'error');
+                                    resetUploadState();
+                                });
+                        }
+                    }).catch(err => {
+                        console.error('Duplicate Check Error:', err);
+                        Swal.fire('Error', 'An error occurred while checking for duplicates.', 'error');
+                        resetUploadState();
+                    });
             }
         });
+
+        // Function to start processing
+        function startProcessing(jobId) {
+            fetch('/start-processing', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ jobId: jobId })
+            }).then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            title: 'Processing...',
+                            text: 'Please wait while the file is being processed.',
+                            allowOutsideClick: false,
+                            didOpen: () => {
+                                Swal.showLoading();
+                            }
+                        });
+                        startStatusCheck(jobId);
+                    } else {
+                        Swal.fire('Error', 'Processing failed.', 'error');
+                    }
+                }).catch(err => {
+                    console.error('Processing Error:', err);
+                    Swal.fire('Error', 'An error occurred during processing.', 'error');
+                });
+        }
+
+        // Function to Reset Upload State
+        function resetUploadState() {
+            selectedFile = null;
+            fileHash = null;
+            fileInput.value = '';
+            fileNameDisplay.textContent = 'No file selected';
+            uploadBtn.textContent = 'Upload';
+            uploadBtn.disabled = true;
+            cancelBtn.disabled = true;
+        }
+
+        function startStatusCheck(jobId) {
+            const intervalId = setInterval(() => {
+                fetch('/check-status', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ jobId: jobId })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'Completed' || data.status === 'Error') {
+                        clearInterval(intervalId);
+                        Swal.close();
+                        Swal.fire({
+                            title: data.status === 'Completed' ? 'Success' : 'Error',
+                            text: `${data.message} File: ${data.file}`,
+                            icon: data.status === 'Completed' ? 'success' : 'error'
+                        });
+                        resetUploadState();
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+            }, 5000);
+        }
+
     </script>
 </body>
 

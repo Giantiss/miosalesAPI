@@ -3,7 +3,7 @@
         'name' => 'nomad/php-excel-api',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => 'dc0bec5e65ed4746a8a781529f936437f06b733c',
+        'reference' => '5f3f2e01ed1fe70031b0732ac3d7264347347c9d',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -55,6 +55,15 @@
             'aliases' => array(),
             'dev_requirement' => false,
         ),
+        'monolog/monolog' => array(
+            'pretty_version' => '2.10.0',
+            'version' => '2.10.0.0',
+            'reference' => '5cf826f2991858b54d5c3809bee745560a1042a7',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../monolog/monolog',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
         'myclabs/deep-copy' => array(
             'pretty_version' => '1.12.0',
             'version' => '1.12.0.0',
@@ -76,7 +85,7 @@
         'nomad/php-excel-api' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => 'dc0bec5e65ed4746a8a781529f936437f06b733c',
+            'reference' => '5f3f2e01ed1fe70031b0732ac3d7264347347c9d',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
@@ -155,9 +164,9 @@
             'dev_requirement' => true,
         ),
         'phpunit/phpunit' => array(
-            'pretty_version' => '8.5.39',
-            'version' => '8.5.39.0',
-            'reference' => '172ba97bcf97ae6ef86ca256adf77aece8a143fe',
+            'pretty_version' => '8.5.40',
+            'version' => '8.5.40.0',
+            'reference' => '48ed828b72c35b38cdddcd9059339734cb06b3a7',
             'type' => 'library',
             'install_path' => __DIR__ . '/../phpunit/phpunit',
             'aliases' => array(),
@@ -189,6 +198,21 @@
             'install_path' => __DIR__ . '/../psr/http-message',
             'aliases' => array(),
             'dev_requirement' => false,
+        ),
+        'psr/log' => array(
+            'pretty_version' => '1.1.4',
+            'version' => '1.1.4.0',
+            'reference' => 'd49695b909c3b7628b6289db5479a1c204601f11',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../psr/log',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
+        'psr/log-implementation' => array(
+            'dev_requirement' => false,
+            'provided' => array(
+                0 => '1.0.0 || 2.0.0 || 3.0.0',
+            ),
         ),
         'psr/simple-cache' => array(
             'pretty_version' => '1.0.1',

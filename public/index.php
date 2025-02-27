@@ -5,10 +5,13 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
 
 require_once '../vendor/autoload.php';
+require_once __DIR__ . '/../src/Api/log_helper.php';
 
 use App\Api\ExcelController;
 use App\Config\Database;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use Monolog\Logger;
+use Monolog\Handler\StreamHandler;
 
 // Create a database connection
 $database = new Database();
@@ -17,25 +20,26 @@ $db = $database->getConnection();
 // Create an instance of the controller
 $controller = new ExcelController($db, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4');
 
-// Logger function for debugging
-function log_message($message)
-{
-    file_put_contents('../logs/debug.log', date('Y-m-d H:i:s') . ' - ' . $message . PHP_EOL, FILE_APPEND);
-}
+// Include the process_file.php script
+require_once __DIR__ . '/../src/Api/process_file.php';
 
 // Get the request method and URI
 $requestMethod = $_SERVER['REQUEST_METHOD'];
 $pathInfo = explode('/', trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/'));
 
 // Check for the Authorization header
-$headers = getallheaders();
-$authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : null;
+$authHeader = isset($_SERVER['HTTP_AUTHORIZATION']) ? $_SERVER['HTTP_AUTHORIZATION'] : null;
+if (!$authHeader && function_exists('apache_request_headers')) {
+    $headers = apache_request_headers();
+    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : null;
+}
+
 log_message('Received Authorization header: ' . ($authHeader ?? 'None'));
 
 // Validate Bearer token
 $validToken = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4";
 
-if ($authHeader !== $validToken) {
+if (!hash_equals($validToken, $authHeader)) {
     http_response_code(401);
     echo json_encode(['error' => 'Unauthorized']);
     log_message('Unauthorized access attempt');
@@ -45,79 +49,175 @@ if ($authHeader !== $validToken) {
 log_message('Request Method: ' . $requestMethod);
 log_message('Path Info: ' . print_r($pathInfo, true));
 
-// Expecting the path to be ['MiosalonAPI', 'upload'] or ['upload']
-if ($requestMethod === 'POST' && isset($pathInfo[0]) && 
-    ($pathInfo[0] === 'MiosalonAPI' && isset($pathInfo[1]) && $pathInfo[1] === 'upload' || 
-     $pathInfo[0] === 'upload')) {
-    if (isset($_FILES['file'])) {
-        $fileTmpName = $_FILES['file']['tmp_name'];
-        $fileName = basename($_FILES['file']['name']);
+// Directory for uploaded files
+$uploadDir = __DIR__ . '/../src/uploads/';
+if (!is_dir($uploadDir)) {
+    if (!mkdir($uploadDir, 0777, true) && !is_dir($uploadDir)) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to create upload directory.']);
+        log_message('Failed to create upload directory: ' . $uploadDir);
+        exit();
+    }
+}
 
-        // Check file extension
-        $allowedExtensions = ['xlsx', 'xls'];
-        $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-        log_message('File extension: ' . $fileExtension);
+// Route Handling
+if ($requestMethod === 'POST' && isset($pathInfo[0])) {
 
-        // Validate file extension
-        if (!in_array($fileExtension, $allowedExtensions)) {
-            http_response_code(400);
-            $responseData = json_encode(['error' => $fileExtension . ' Invalid file extension. Only .xlsx and .xls files are allowed.']);
-            echo $responseData;
-            log_message('Invalid file extension: ' . $fileExtension);
-            exit();
-        }
+    // Route: /upload
+    if ($pathInfo[0] === 'upload') {
 
-        // Validate MIME type
-        $allowedMimeTypes = [
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
-            'application/vnd.ms-excel' // xls
-        ];
-        $finfo = new finfo(FILEINFO_MIME_TYPE);
-        $mimeType = $finfo->file($fileTmpName);
-        log_message('Detected MIME type: ' . $mimeType);
+        if (isset($_FILES['file'])) {
+            $file = $_FILES['file'];
+            $fileTmpName = $file['tmp_name'];
+            $fileName = basename($file['name']);
 
-        if (!in_array($mimeType, $allowedMimeTypes)) {
-            http_response_code(400);
-            $responseData = json_encode(['error' => 'Invalid file type. Only Excel files are allowed.']);
-            echo $responseData;
-            log_message('Invalid MIME type: ' . $mimeType);
-            exit();
-        }
+            // Validate file extension
+            $allowedExtensions = ['xlsx', 'xls'];
+            $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+            log_message('File extension: ' . $fileExtension);
 
-        // Attempt to open the file with PhpSpreadsheet
-        try {
-            $spreadsheet = IOFactory::load($fileTmpName);
-
-            // If the file was successfully loaded, proceed with your import logic
-            $response = $controller->importExcel($fileTmpName);
-
-            if ($response['status'] === 'success') {
-                http_response_code(200);
-                $responseData = json_encode(['message' => 'File imported successfully']);
-                echo $responseData;
-                log_message('File imported successfully');
-            } else {
+            if (!in_array($fileExtension, $allowedExtensions)) {
                 http_response_code(400);
-                $responseData = json_encode(['error' => $response['message']]);
-                echo $responseData;
-                log_message('File import failed: ' . $response['message']);
+                header('Content-Type: application/json');
+                echo json_encode(['error' => $fileExtension . ' Invalid file extension. Only .xlsx and .xls files are allowed.']);
+                log_message('Invalid file extension: ' . $fileExtension);
+                exit();
             }
-        } catch (Exception $e) {
-            http_response_code(400);
-            $responseData = json_encode(['error' => 'Warning: Invalid file type. Only Excel files are allowed!']);
-            echo $responseData;
-            log_message('Invalid file type or corrupted file: ' . $e->getMessage());
+
+            // Check if the user allowed duplicate
+            $allowDuplicate = isset($_POST['allowDuplicate']) && $_POST['allowDuplicate'] === 'true';
+
+            // Calculate file hash for duplicate check
+            $hash = md5_file($fileTmpName);
+            $isDuplicate = false;
+
+            // Check for duplicates only if not allowed
+            if (!$allowDuplicate) {
+                foreach (scandir($uploadDir) as $existingFile) {
+                    if ($existingFile !== '.' && $existingFile !== '..') {
+                        $existingFilePath = $uploadDir . $existingFile;
+                        if (md5_file($existingFilePath) === $hash) {
+                            $isDuplicate = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if ($isDuplicate) {
+                http_response_code(409);
+                header('Content-Type: application/json');
+                echo json_encode(['error' => 'Duplicate file detected.', 'isDuplicate' => true]);
+                log_message('Duplicate file detected: ' . $fileName);
+                exit();
+            }
+
+            // Save the uploaded file
+            $savedFileName = time() . '_' . $fileName;
+            $destination = $uploadDir . $savedFileName;
+
+            if (move_uploaded_file($fileTmpName, $destination)) {
+                // Add the job to the queue
+                $jobFilePath = $uploadDir . 'jobs.json';
+                $jobs = file_exists($jobFilePath) ? json_decode(file_get_contents($jobFilePath), true) : [];
+                $jobId = uniqid();
+                $jobs[] = ['id' => $jobId, 'file' => $savedFileName, 'status' => 'uploaded', 'uploaded_at' => date('c')];
+                file_put_contents($jobFilePath, json_encode($jobs, JSON_PRETTY_PRINT));
+                log_message('Job added to the queue: ' . $jobFilePath);
+
+                // Return a response immediately to the client.
+                http_response_code(200);
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'File uploaded successfully. Ready for processing.',
+                    'jobId' => $jobId
+                ]);
+            } else {
+                http_response_code(500);
+                header('Content-Type: application/json');
+                echo json_encode(['error' => 'Failed to move uploaded file']);
+                log_message('Failed to move uploaded file');
+            }
+        }
+
+
+        // Route: /check-duplicate
+    } elseif ($pathInfo[0] === 'check-duplicate') {
+        $requestData = json_decode(file_get_contents('php://input'), true);
+        $hash = $requestData['hash'] ?? '';
+
+        if (empty($hash)) {
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'No hash provided.']);
             exit();
+        }
+
+        // Check if any file in the uploads or processed directory matches the hash
+        $isDuplicate = false;
+        $directories = [$uploadDir, __DIR__ . '/../src/processed/'];
+        foreach ($directories as $directory) {
+            foreach (scandir($directory) as $file) {
+                if ($file !== '.' && $file !== '..') {
+                    $filePath = $directory . $file;
+                    if (md5_file($filePath) === $hash) {
+                        $isDuplicate = true;
+                        break 2; // Exit both loops
+                    }
+                }
+            }
+        }
+
+        header('Content-Type: application/json');
+        echo json_encode(['isDuplicate' => $isDuplicate]);
+    } elseif ($pathInfo[0] === 'start-processing') {
+        $requestData = json_decode(file_get_contents('php://input'), true);
+        $jobId = $requestData['jobId'] ?? null;
+
+        if (!$jobId) {
+            http_response_code(400);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'No job ID provided.']);
+            exit();
+        }
+
+        // Call the process_file function directly
+        ob_start();
+        process_file($jobId);
+        $output = ob_get_clean();
+        log_message('Processing started for job ID: ' . $jobId);
+
+        // Return a response immediately to the client.
+        http_response_code(200);
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => true,
+            'message' => 'Processing started.',
+            'jobId' => $jobId,
+            'output' => $output
+        ]);
+    } elseif ($pathInfo[0] === 'check-status') {
+        $statusFilePath = __DIR__ . '/../src/status/status.json';
+        log_message('Checking status file: ' . $statusFilePath);
+        if (file_exists($statusFilePath)) {
+            $status = json_decode(file_get_contents($statusFilePath), true);
+            log_message('Status file content: ' . print_r($status, true));
+            header('Content-Type: application/json');
+            echo json_encode($status);
+        } else {
+            log_message('Status file not found: ' . $statusFilePath);
+            header('Content-Type: application/json');
+            echo json_encode(['status' => 'No status available']);
         }
     } else {
-        http_response_code(400);
-        $responseData = json_encode(['error' => 'No file uploaded']);
-        echo $responseData;
-        log_message('No file uploaded');
+        http_response_code(404);
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'Invalid route']);
     }
 } else {
     http_response_code(400);
-    $responseData = json_encode(['error' => 'Invalid request']);
-    echo $responseData;
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Invalid request']);
     log_message('Invalid request method or path');
 }
+?>
