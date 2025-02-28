@@ -2,6 +2,7 @@
 
 namespace App\Api;
 
+use App\Config\Database; // Import the Database class
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PDOException;
 use DateTime;
@@ -9,16 +10,21 @@ use Exception;
 
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 class ExcelController
 {
     private $db;
     private $token;
 
-    public function __construct($db, $token)
+    public function __construct(Database $db, $token)
     {
-        $this->db = $db;
+        $this->db = $db->getConnection(); // Get the database connection from the Database class
         $this->token = $token;
+
+        if (!$this->db) {
+            throw new Exception("Database connection failed.");
+        }
     }
 
     public function importExcel($filePath, $batchSize = 100)
@@ -174,10 +180,12 @@ class ExcelController
             }
 
             // Log the data being inserted to verify it
-            error_log("Inserting Batch: " . print_r($batchData, true), 3, __DIR__ . '/../../logs/debug.log');
-
+            // error_log("Inserting Batch: " . print_r($batchData, true), 3, __DIR__ . '/../../logs/debug.log');
+            log_message('Batch size: ' . count($batchData));
+            $startTime = microtime(true);
             // Start a transaction
             $this->db->beginTransaction();
+
 
             // Prepare the query with placeholders for multiple rows
             $query = "INSERT INTO service_sheet (entry_date, reciept_no, stylist, service, amount, net, spa_transaction, expunged, v_account) VALUES ";
@@ -202,7 +210,7 @@ class ExcelController
             $query .= implode(", ", $placeholders);
 
             // Log the query and parameters to verify they are being passed correctly
-            error_log("Executing Query: $query with Params: " . print_r($params, true), 3, __DIR__ . '/../../logs/debug.log');
+            // error_log("Executing Query: $query with Params: " . print_r($params, true), 3, __DIR__ . '/../../logs/debug.log');
 
             // Execute the insert query
             $stmt = $this->db->prepare($query);
@@ -210,6 +218,8 @@ class ExcelController
 
             // Commit the transaction
             $this->db->commit();
+            $endTime = microtime(true);
+            log_message('Batch insert took ' . round($endTime - $startTime, 4) . ' seconds');
         } catch (PDOException $e) {
             // Log the error and roll back the transaction
             $this->db->rollBack();
@@ -303,76 +313,6 @@ class ExcelController
         return floatval(str_replace(',', '', $amount));
     }
 
-    private function insertRow($rowData)
-    {
-        try {
-            // Ensure $rowData is valid
-            if (empty($rowData)) {
-                throw new Exception("Invalid or empty data provided for insert.");
-            }
-
-            // Log the data being inserted to verify it
-            error_log("Inserting Row: " . print_r($rowData, true), 3, __DIR__ . '/../../logs/debug.log');
-
-            // Start a transaction
-            $this->db->beginTransaction();
-
-            // Prepare the query
-            $query = "INSERT INTO service_sheet (entry_date, reciept_no, stylist, service, amount, net, spa_transaction, expunged, v_account) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-
-            // Prepare the parameters
-            $params = [
-                $rowData['entry_date'],
-                $rowData['reciept_no'],
-                $rowData['stylist'],
-                $rowData['service'],
-                $rowData['amount'],
-                $rowData['net'],
-                $rowData['spa_transaction'], // 'N' by default
-                $rowData['expunged'],        // 'N' by default
-                $rowData['v_account']       // 'N' by default
-            ];
-
-            // Log the query and parameters to verify they are being passed correctly
-            error_log("Executing Query: $query with Params: " . print_r($params, true), 3, __DIR__ . '/../../logs/debug.log');
-
-            // Execute the insert query row by row
-            $stmt = $this->db->prepare($query);
-            $result = $stmt->execute($params);
-
-            // Check if the query was successful
-            if ($stmt->rowCount() > 0) {
-                error_log("Row inserted successfully.", 3, __DIR__ . '/../../logs/debug.log');
-            } else {
-                error_log("No rows inserted for data: " . print_r($rowData, true), 3, __DIR__ . '/../../logs/debug.log');
-            }
-
-            // Check if the query was successful
-            if (!$result) {
-                // If the insertion fails, get the error details
-                $errorInfo = $this->db->errorInfo();
-                error_log("Database: " . print_r($errorInfo, true), 3, __DIR__ . '/../../logs/debug.log');
-            } else {
-                // Handle successful query execution
-                echo "Data inserted successfully!";
-            }
-
-            // Commit the transaction
-            $this->db->commit();
-        } catch (PDOException $e) {
-            // Log the error and roll back the transaction
-            $this->db->rollBack();
-            $this->db->errorInfo(); // This will return an array with SQL error details.
-            $this->logError("Database insert failed: " . $e->getMessage());
-            throw new Exception("Database insert failed: " . $e->getMessage());
-        } catch (Exception $e) {
-            // Catch any other exceptions and roll back
-            $this->db->rollBack();
-            $this->logError("Error: " . $e->getMessage());
-            throw new Exception("Error: " . $e->getMessage());
-        }
-    }
 
     private function logError($message)
     {

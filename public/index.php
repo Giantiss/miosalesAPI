@@ -9,16 +9,14 @@ require_once __DIR__ . '/../src/Api/log_helper.php';
 
 use App\Api\ExcelController;
 use App\Config\Database;
-use PhpOffice\PhpSpreadsheet\IOFactory;
-use Monolog\Logger;
-use Monolog\Handler\StreamHandler;
+
 
 // Create a database connection
 $database = new Database();
 $db = $database->getConnection();
 
 // Create an instance of the controller
-$controller = new ExcelController($db, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4');
+$controller = new ExcelController($database, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4');
 
 // Include the process_file.php script
 require_once __DIR__ . '/../src/Api/process_file.php';
