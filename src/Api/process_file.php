@@ -5,6 +5,7 @@ require_once __DIR__ . '/log_helper.php';
 
 use App\Api\ExcelController;
 use App\Config\Database;
+//todo make this a Class and call the methods from Index file.
 
 // Define the process_file function
 function process_file($jobId) {
@@ -76,7 +77,8 @@ function process_file($jobId) {
     // Define the batch size
     $batchSize = 500; // Adjust the batch size as needed
 
-    // Function to update job file status
+    // Function to update job file status 
+    //todo Remove code
     function updateJobStatus($jobFilePath, $jobId, $status)
     {
         $jobData = json_decode(file_get_contents($jobFilePath), true);
@@ -146,7 +148,7 @@ function process_file($jobId) {
 
     log_message('process_file.php: Finished processing.');
 }
-
+//todo remove
 // Check if the script is being run from the command line
 if (php_sapi_name() === 'cli') {
     $jobId = $argv[1] ?? null;

@@ -6,7 +6,7 @@ use PDO;
 class Database
 {
     // Database connection parameters
-    private $host = 'localhost';
+    const DB_HOST = 'localhost';
     private $db_name = 'nyweless';
     private $username = 'root';
     private $password = 'gentleman';
@@ -19,7 +19,8 @@ class Database
 
         try {
             // Create a new PDO instance and set the connection parameters
-            $this->conn = new PDO("mysql:host=" . $this->host . ";dbname=" . $this->db_name, $this->username, $this->password);
+            $this->conn = new PDO("mysql:host=" . Database::DB_HOST . ";dbname=" . $this->db_name, $this->username, $this->password);
+            $this->conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             // Set the character encoding to UTF-8
             $this->conn->exec("set names utf8");
         } catch (\PDOException $exception) { // Use \PDOException

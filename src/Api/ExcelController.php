@@ -8,9 +8,7 @@ use PDOException;
 use DateTime;
 use Exception;
 
-ini_set('display_errors', 1);
 error_reporting(E_ALL);
-mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 class ExcelController
 {
@@ -65,20 +63,16 @@ class ExcelController
         }
 
         try {
-            log_message('File exists and MIME type is valid: ' . $filePath);
+            log_message(__METHOD__.'| File exists and MIME type is valid: ' . $filePath);
 
             // Load the spreadsheet
             $spreadsheet = IOFactory::load($filePath);
-            log_message('Spreadsheet loaded successfully');
+            log_message(__METHOD__.'|Spreadsheet loaded successfully');
             $sheet = $spreadsheet->getActiveSheet();
             $sheetData = $sheet->toArray(null, true, true, true);
 
             $highestRow = $sheet->getHighestRow(); // Get the actual last row with data
             $totalRows = $highestRow - 1; // Exclude header row
-
-            // Insert initial progress record
-            $stmt = $this->db->prepare("INSERT INTO file_upload_progress (file_name, total_rows, rows_processed, progress_percentage) VALUES (?, ?, 0, 0)");
-            $stmt->execute([$fileName, $totalRows]);
 
             $rowsInserted = 0;
             $batchData = [];
@@ -180,20 +174,21 @@ class ExcelController
             }
 
             // Log the data being inserted to verify it
-            // error_log("Inserting Batch: " . print_r($batchData, true), 3, __DIR__ . '/../../logs/debug.log');
+            error_log(__METHOD__."| Inserting Batch: " . print_r($batchData, true), 3, __DIR__ . '/../../logs/debug.log');
             log_message('Batch size: ' . count($batchData));
             $startTime = microtime(true);
-            // Start a transaction
-            $this->db->beginTransaction();
+        
 
 
             // Prepare the query with placeholders for multiple rows
-            $query = "INSERT INTO service_sheet (entry_date, reciept_no, stylist, service, amount, net, spa_transaction, expunged, v_account) VALUES ";
+            $query = "INSERT INTO service_sheet (entry_date, reciept_no, stylist, `service`, amount, net, 
+            spa_transaction, expunged
+            ) VALUES ";
             $placeholders = [];
             $params = [];
 
             foreach ($batchData as $rowData) {
-                $placeholders[] = "(?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $placeholders[] = "(?, ?, ?, ?, ?, ?, ?, ?)";
                 $params = array_merge($params, [
                     $rowData['entry_date'],
                     $rowData['reciept_no'],
@@ -203,27 +198,32 @@ class ExcelController
                     $rowData['net'],
                     $rowData['spa_transaction'],
                     $rowData['expunged'],
-                    $rowData['v_account']
                 ]);
             }
 
             $query .= implode(", ", $placeholders);
 
             // Log the query and parameters to verify they are being passed correctly
-            // error_log("Executing Query: $query with Params: " . print_r($params, true), 3, __DIR__ . '/../../logs/debug.log');
+            error_log("Executing Query: $query with Params: " . print_r($params, true), 3, __DIR__ . '/../../logs/debug.log');
 
             // Execute the insert query
             $stmt = $this->db->prepare($query);
-            $stmt->execute($params);
+            $response= $stmt->execute($params);
+            
+
+            // Check if the query was successful
+            log_message('Batch insert response: ' . $response);
+            log_message('Rows inserted: ' . $stmt->rowCount());
+
 
             // Commit the transaction
-            $this->db->commit();
+         //   $this->db->commit();
             $endTime = microtime(true);
             log_message('Batch insert took ' . round($endTime - $startTime, 4) . ' seconds');
         } catch (PDOException $e) {
             // Log the error and roll back the transaction
-            $this->db->rollBack();
-            $this->logError("Database batch insert failed: " . $e->getMessage());
+            
+            $this->logError(__METHOD__."| Database batch insert failed: " . $e->getMessage());
             throw new Exception("Database batch insert failed: " . $e->getMessage());
         } catch (Exception $e) {
             // Catch any other exceptions and roll back
@@ -233,31 +233,31 @@ class ExcelController
         }
     }
 
-    public function validateData()
-    {
-        $response = ['status' => 'error', 'message' => 'Unknown error'];
+    // public function validateData()
+    // {
+    //     $response = ['status' => 'error', 'message' => 'Unknown error'];
 
-        try {
-            // SQL query to validate data in uploadData table
-            $stmt = $this->db->prepare("SELECT reciept_no, entry_date, details FROM uploadData WHERE is_valid = 0");
-            $stmt->execute();
-            $invalidRows = $stmt->fetchAll();
+    //     try {
+    //         // SQL query to validate data in uploadData table
+    //         $stmt = $this->db->prepare("SELECT reciept_no, entry_date, details FROM uploadData WHERE is_valid = 0");
+    //         $stmt->execute();
+    //         $invalidRows = $stmt->fetchAll();
 
-            if (empty($invalidRows)) {
-                $response = ['status' => 'success', 'message' => 'All data is valid.'];
-            } else {
-                $response = ['status' => 'error', 'invalidRows' => $invalidRows];
-            }
-        } catch (PDOException $e) {
-            $response['message'] = 'Database error occurred: ' . $e->getMessage();
-            $this->logError($e->getMessage());
-        } catch (Exception $e) {
-            $response['message'] = 'An error occurred while validating the data: ' . $e->getMessage();
-            $this->logError($e->getMessage());
-        }
+    //         if (empty($invalidRows)) {
+    //             $response = ['status' => 'success', 'message' => 'All data is valid.'];
+    //         } else {
+    //             $response = ['status' => 'error', 'invalidRows' => $invalidRows];
+    //         }
+    //     } catch (PDOException $e) {
+    //         $response['message'] = 'Database error occurred: ' . $e->getMessage();
+    //         $this->logError($e->getMessage());
+    //     } catch (Exception $e) {
+    //         $response['message'] = 'An error occurred while validating the data: ' . $e->getMessage();
+    //         $this->logError($e->getMessage());
+    //     }
 
-        return $response;
-    }
+    //     return $response;
+    // }
 
     private function getStylistIDByName($stylist_name)
     {
@@ -275,7 +275,7 @@ class ExcelController
 
     private function getServiceIDByName($service_name)
     {
-        $stmt = $this->db->prepare("SELECT id FROM services WHERE name = ?");
+        $stmt = $this->db->prepare("SELECT id FROM services WHERE item = ?");
         $stmt->execute([$service_name]);
         $serviceID = $stmt->fetchColumn();
 
