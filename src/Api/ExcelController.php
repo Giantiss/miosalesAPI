@@ -174,7 +174,7 @@ class ExcelController
             }
 
             // Log the data being inserted to verify it
-            error_log(__METHOD__."| Inserting Batch: " . print_r($batchData, true), 3, __DIR__ . '/../../logs/debug.log');
+            // error_log(__METHOD__."| Inserting Batch: " . print_r($batchData, true), 3, __DIR__ . '/../../logs/debug.log');
             log_message('Batch size: ' . count($batchData));
             $startTime = microtime(true);
         
@@ -204,7 +204,7 @@ class ExcelController
             $query .= implode(", ", $placeholders);
 
             // Log the query and parameters to verify they are being passed correctly
-            error_log("Executing Query: $query with Params: " . print_r($params, true), 3, __DIR__ . '/../../logs/debug.log');
+            // error_log("Executing Query: $query with Params: " . print_r($params, true), 3, __DIR__ . '/../../logs/debug.log');
 
             // Execute the insert query
             $stmt = $this->db->prepare($query);
@@ -232,32 +232,6 @@ class ExcelController
             throw new Exception("Error: " . $e->getMessage());
         }
     }
-
-    // public function validateData()
-    // {
-    //     $response = ['status' => 'error', 'message' => 'Unknown error'];
-
-    //     try {
-    //         // SQL query to validate data in uploadData table
-    //         $stmt = $this->db->prepare("SELECT reciept_no, entry_date, details FROM uploadData WHERE is_valid = 0");
-    //         $stmt->execute();
-    //         $invalidRows = $stmt->fetchAll();
-
-    //         if (empty($invalidRows)) {
-    //             $response = ['status' => 'success', 'message' => 'All data is valid.'];
-    //         } else {
-    //             $response = ['status' => 'error', 'invalidRows' => $invalidRows];
-    //         }
-    //     } catch (PDOException $e) {
-    //         $response['message'] = 'Database error occurred: ' . $e->getMessage();
-    //         $this->logError($e->getMessage());
-    //     } catch (Exception $e) {
-    //         $response['message'] = 'An error occurred while validating the data: ' . $e->getMessage();
-    //         $this->logError($e->getMessage());
-    //     }
-
-    //     return $response;
-    // }
 
     private function getStylistIDByName($stylist_name)
     {
