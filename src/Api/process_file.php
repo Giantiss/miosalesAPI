@@ -100,6 +100,10 @@ class FileProcessor {
                 // Log the result of the processing
                 log_message('FileProcessor: File processing result: ' . print_r($result, true));
 
+                if ($result['status'] === 'error') {
+                    throw new Exception($result['message']);
+                }
+
                 // Move the processed file to the processed directory
                 $newLocation = $this->processedDir . $file;
                 if (rename($filePath, $newLocation)) {
@@ -115,6 +119,8 @@ class FileProcessor {
                 $status['status'] = 'Completed';
                 $status['message'] = 'File processing completed successfully.';
                 $status['file'] = $file;
+                $status['rowsInserted'] = $result['rowsInserted'];
+                $status['totalAmount'] = $result['totalAmount'];
                 file_put_contents($this->statusFile, json_encode($status));
                 log_message('FileProcessor: Status updated to "Completed"');
             } catch (Exception $e) {
@@ -129,6 +135,7 @@ class FileProcessor {
                 $status['file'] = $file;
                 file_put_contents($this->statusFile, json_encode($status));
                 log_message('FileProcessor: Status updated to "Error"');
+                break; // Stop processing further files on error
             }
         }
 

@@ -39,6 +39,9 @@ log_message('Received Authorization header: ' . ($authHeader ?? 'None'));
 // Validate Bearer token
 $validToken = $config['bearer_token'];
 
+// Ensure $authHeader is a string
+$authHeader = (string)$authHeader;
+
 if (!hash_equals($validToken, $authHeader)) {
     http_response_code(401);
     echo json_encode(['error' => 'Unauthorized']);
@@ -154,6 +157,9 @@ if ($requestMethod === 'POST' && isset($pathInfo[0])) {
             $isDuplicate = false;
             $directories = [$uploadDir, __DIR__ . '/../src/processed/'];
             foreach ($directories as $directory) {
+                if (!is_dir($directory)) {
+                    continue;
+                }
                 foreach (scandir($directory) as $file) {
                     if ($file !== '.' && $file !== '..') {
                         $filePath = $directory . $file;
@@ -204,8 +210,18 @@ if ($requestMethod === 'POST' && isset($pathInfo[0])) {
             if (file_exists($statusFilePath)) {
                 $status = json_decode(file_get_contents($statusFilePath), true);
                 log_message('Status file content: ' . print_r($status, true));
+
+                // Ensure rowsInserted and totalAmount are included in the response
+                $rowsInserted = $status['rowsInserted'] ?? 0;
+                $totalAmount = $status['totalAmount'] ?? 0;
+
                 header('Content-Type: application/json');
-                echo json_encode($status);
+                echo json_encode([
+                    'status' => $status['status'],
+                    'rowsInserted' => $rowsInserted,
+                    'totalAmount' => $totalAmount,
+                    'message' => $status['message'] ?? ''
+                ]);
             } else {
                 log_message('Status file not found: ' . $statusFilePath);
                 header('Content-Type: application/json');

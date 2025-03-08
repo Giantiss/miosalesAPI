@@ -4,6 +4,7 @@ namespace App\Api;
 
 use App\Config\Database; // Import the Database class
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PDO;
 use PDOException;
 use DateTime;
 use Exception;
@@ -17,11 +18,22 @@ class ExcelController
 
     public function __construct(Database $db, $token)
     {
-        $this->db = $db->getConnection(); // Get the database connection from the Database class
-        $this->token = $token;
+        try {
+            $this->db = $db->getConnection(); // Get the database connection from the Database class
+            $this->token = $token;
 
-        if (!$this->db) {
-            throw new Exception("Database connection failed.");
+            // Log the connection status
+            if ($this->db) {
+                error_log("Database connection established.", 3, __DIR__ . '/../../logs/debug.log');
+            } else {
+                $errorInfo = $this->db ? $this->db->errorInfo() : ['No connection'];
+                $errorMessage = "Database connection failed: " . implode(' ', $errorInfo);
+                error_log($errorMessage, 3, __DIR__ . '/../../logs/debug.log');
+                throw new Exception($errorMessage);
+            }
+        } catch (Exception $e) {
+            error_log($e->getMessage(), 3, __DIR__ . '/../../logs/debug.log');
+            throw $e;
         }
     }
 
@@ -30,7 +42,11 @@ class ExcelController
         // Logger function for debugging
         function log_message($message)
         {
-            file_put_contents('../logs/database_insert.log', date('Y-m-d H:i:s') . ' - ' . $message . PHP_EOL, FILE_APPEND);
+            $logDir = __DIR__ . '/../../logs';
+            if (!is_dir($logDir)) {
+                mkdir($logDir, 0777, true);
+            }
+            file_put_contents($logDir . '/database_insert.log', date('Y-m-d H:i:s') . ' - ' . $message . PHP_EOL, FILE_APPEND);
         }
 
         log_message('Starting importExcel method');
@@ -63,11 +79,11 @@ class ExcelController
         }
 
         try {
-            log_message(__METHOD__.'| File exists and MIME type is valid: ' . $filePath);
+            log_message(__METHOD__ . '| File exists and MIME type is valid: ' . $filePath);
 
             // Load the spreadsheet
             $spreadsheet = IOFactory::load($filePath);
-            log_message(__METHOD__.'|Spreadsheet loaded successfully');
+            log_message(__METHOD__ . '|Spreadsheet loaded successfully');
             $sheet = $spreadsheet->getActiveSheet();
             $sheetData = $sheet->toArray(null, true, true, true);
 
@@ -76,6 +92,9 @@ class ExcelController
 
             $rowsInserted = 0;
             $batchData = [];
+
+            // Create a temporary table
+            $this->createTemporaryTable();
 
             foreach ($sheetData as $rowIndex => $row) {
                 if ($rowIndex === 1) {
@@ -102,7 +121,7 @@ class ExcelController
                 // Get the values from the row
                 $reciept_no = $row['B']; // Sale no. column
                 $stylist_name = $row['H']; // Team member column (use this to find stylist ID)
-                $service_name = $row['D']; // Item column (use this to find service ID)
+                $service_name = $row['E']; // Item column (use this to find service ID)
                 $amount = $this->parseAmount($row['Q']); // Total sales column
                 $net = $amount * 0.86; // Net sales column, adjusted to 86%
 
@@ -112,28 +131,14 @@ class ExcelController
                     return $response;
                 }
 
-                // Find stylist ID based on stylist name
-                try {
-                    $stylistID = $this->getStylistIDByName($stylist_name);
-                } catch (Exception $e) {
-                    $response['message'] = $e->getMessage(); // Error message from getStylistIDByName
-                    return $response;
-                }
-
-                // Find service ID based on service name
-                $serviceID = $this->getServiceIDByName($service_name);
-
-                // Prepare data for insertion
+                // Prepare data for insertion into temporary table
                 $rowData = [
                     'entry_date' => $entry_date,
                     'reciept_no' => $reciept_no,
-                    'stylist' => $stylistID,
-                    'service' => $serviceID,
+                    'stylist_name' => $stylist_name,
+                    'service_name' => $service_name,
                     'amount' => $amount,
-                    'net' => $net,
-                    'spa_transaction' => null, // Assuming you have a logic for this value
-                    'expunged' => 0, // Default value if no logic
-                    'v_account' => null // Assuming you have a logic for this value
+                    'net' => $net
                 ];
 
                 // Add row data to batch
@@ -141,31 +146,80 @@ class ExcelController
 
                 // Insert batch if batch size is reached
                 if (count($batchData) >= $batchSize) {
-                    $this->insertBatch($batchData);
-                    $rowsInserted += count($batchData);
+                    $this->insertTemporaryBatch($batchData);
                     $batchData = []; // Reset batch data
                 }
             }
 
             // Insert any remaining rows in the batch
             if (!empty($batchData)) {
-                $this->insertBatch($batchData);
-                $rowsInserted += count($batchData);
+                $this->insertTemporaryBatch($batchData);
             }
 
-            $response = ['status' => 'success', 'rowsInserted' => $rowsInserted];
+            // Check for duplicate receipt numbers using MySQL joins
+            $duplicateReceipts = $this->checkDuplicateReceipts();
+            if (!empty($duplicateReceipts)) {
+                $response['message'] = 'Duplicate receipt numbers found: ' . implode(', ', (array)$duplicateReceipts);
+                return $response;
+            }
+
+            // Validate stylists and services using MySQL joins
+            $invalidStylists = $this->checkInvalidStylists();
+            if (!empty($invalidStylists)) {
+                $response['message'] = 'Invalid stylists found: ' . implode(', ', $invalidStylists) . '. Please add these stylists to the database and try again.';
+                $response['invalidStylists'] = $invalidStylists;
+                $response['invalidStylistsCount'] = count($invalidStylists);
+                return $response;
+            }
+
+            $invalidServices = $this->checkInvalidServices();
+            if (!empty($invalidServices)) {
+                $response['message'] = 'Invalid services found: ' . implode(', ', $invalidServices) . '. Please add these services to the database and try again.';
+                $response['invalidServices'] = $invalidServices;
+                $response['invalidServicesCount'] = count($invalidServices);
+                return $response;
+            }
+
+            // Update invalid services to 'new-service'
+            $this->updateInvalidServices();
+
+            // Insert data from temporary table to service_sheet table
+            $this->insertFromTemporaryTable();
+            $rowsInserted = $this->getTemporaryTableRowCount();
+            $totalAmount = $this->getTotalAmountFromTemporaryTable();
+
+            $response = [
+                'status' => 'success',
+                'rowsInserted' => $rowsInserted,
+                'totalAmount' => $totalAmount
+            ];
         } catch (PDOException $e) {
-            $response['message'] = 'Database error occurred: ' . $e->getMessage();
+            $response['message'] = 'Database error occurred: ' . $e->getMessage() . '. Please contact support.';
             $this->logError($e->getMessage());
+            return $response; // Return the response immediately on error
         } catch (Exception $e) {
-            $response['message'] = 'An error occurred while processing the file: ' . $e->getMessage();
+            $response['message'] = 'An error occurred while processing the file: ' . $e->getMessage() . '. Please contact support.';
             $this->logError($e->getMessage());
+            return $response; // Return the response immediately on error
         }
 
         return $response;
     }
 
-    private function insertBatch($batchData)
+    private function createTemporaryTable()
+    {
+        $query = "CREATE TEMPORARY TABLE temp_service_sheet (
+            entry_date DATE,
+            reciept_no VARCHAR(255),
+            stylist_name VARCHAR(255),
+            service_name VARCHAR(255),
+            amount DECIMAL(10, 2),
+            net DECIMAL(10, 2)
+        )";
+        $this->db->exec($query);
+    }
+
+    private function insertTemporaryBatch($batchData)
     {
         try {
             // Ensure $batchData is valid
@@ -174,56 +228,40 @@ class ExcelController
             }
 
             // Log the data being inserted to verify it
-            // error_log(__METHOD__."| Inserting Batch: " . print_r($batchData, true), 3, __DIR__ . '/../../logs/debug.log');
             log_message('Batch size: ' . count($batchData));
             $startTime = microtime(true);
-        
 
 
             // Prepare the query with placeholders for multiple rows
-            $query = "INSERT INTO service_sheet (entry_date, reciept_no, stylist, `service`, amount, net, 
-            spa_transaction, expunged
-            ) VALUES ";
+            $query = "INSERT INTO temp_service_sheet (entry_date, reciept_no, stylist_name, service_name, amount, net) VALUES ";
             $placeholders = [];
             $params = [];
 
             foreach ($batchData as $rowData) {
-                $placeholders[] = "(?, ?, ?, ?, ?, ?, ?, ?)";
+                $placeholders[] = "(?, ?, ?, ?, ?, ?)";
                 $params = array_merge($params, [
                     $rowData['entry_date'],
                     $rowData['reciept_no'],
-                    $rowData['stylist'],
-                    $rowData['service'],
+                    $rowData['stylist_name'],
+                    $rowData['service_name'],
                     $rowData['amount'],
-                    $rowData['net'],
-                    $rowData['spa_transaction'],
-                    $rowData['expunged'],
+                    $rowData['net']
                 ]);
             }
 
             $query .= implode(", ", $placeholders);
 
-            // Log the query and parameters to verify they are being passed correctly
-            // error_log("Executing Query: $query with Params: " . print_r($params, true), 3, __DIR__ . '/../../logs/debug.log');
-
             // Execute the insert query
             $stmt = $this->db->prepare($query);
-            $response= $stmt->execute($params);
-            
+            $stmt->execute($params);
 
             // Check if the query was successful
-            log_message('Batch insert response: ' . $response);
-            log_message('Rows inserted: ' . $stmt->rowCount());
-
-
-            // Commit the transaction
-         //   $this->db->commit();
+            log_message('Batch insert response: ' . $stmt->rowCount());
             $endTime = microtime(true);
             log_message('Batch insert took ' . round($endTime - $startTime, 4) . ' seconds');
         } catch (PDOException $e) {
             // Log the error and roll back the transaction
-            
-            $this->logError(__METHOD__."| Database batch insert failed: " . $e->getMessage());
+            $this->logError(__METHOD__ . "| Database batch insert failed: " . $e->getMessage());
             throw new Exception("Database batch insert failed: " . $e->getMessage());
         } catch (Exception $e) {
             // Catch any other exceptions and roll back
@@ -233,28 +271,64 @@ class ExcelController
         }
     }
 
-    private function getStylistIDByName($stylist_name)
+    private function checkDuplicateReceipts()
     {
-        $stmt = $this->db->prepare("SELECT id FROM stylists WHERE name = ?");
-        $stmt->execute([$stylist_name]);
-        $stylistID = $stmt->fetchColumn();
-
-        // If no stylist ID is found, throw an exception to stop the process
-        if ($stylistID === false) {
-            throw new Exception("Stylist with name '$stylist_name' not found in the database.");
-        }
-
-        return $stylistID;
+        $query = "SELECT temp_service_sheet.reciept_no FROM temp_service_sheet
+                  JOIN service_sheet ON temp_service_sheet.reciept_no = service_sheet.reciept_no";
+        $stmt = $this->db->query($query);
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
     }
 
-    private function getServiceIDByName($service_name)
+    private function checkInvalidStylists()
     {
-        $stmt = $this->db->prepare("SELECT id FROM services WHERE item = ?");
-        $stmt->execute([$service_name]);
-        $serviceID = $stmt->fetchColumn();
+        $query = "SELECT DISTINCT stylist_name FROM temp_service_sheet
+                  LEFT JOIN stylists ON LOWER(temp_service_sheet.stylist_name) = LOWER(stylists.name)
+                  WHERE stylists.id IS NULL";
+        $stmt = $this->db->query($query);
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
 
-        // Return the fetched ID, or default to 5000 if no ID is found
-        return $serviceID !== false ? $serviceID : 5000;
+    private function checkInvalidServices()
+    {
+        $query = "SELECT DISTINCT service_name FROM temp_service_sheet
+                  LEFT JOIN services ON LOWER(temp_service_sheet.service_name) = LOWER(services.item)
+                  WHERE services.id IS NULL";
+        $stmt = $this->db->query($query);
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    private function insertFromTemporaryTable()
+    {
+        // Insert data from the temporary table into the service_sheet table
+        $query = "INSERT INTO service_sheet
+                  (`entryId`, `entry_date`, `stylist`, `service`, `amount`, `net`, `reciept_no`)
+                  SELECT null, `entry_date`, st.id, sv.id, `amount`, `net`, `reciept_no`
+                  FROM `temp_service_sheet` s
+                  INNER JOIN stylists st ON st.name = s.stylist_name
+                  INNER JOIN services sv ON s.service_name = sv.item";
+        $this->db->exec($query);
+    }
+
+    private function updateInvalidServices()
+    {
+        // Update invalid services to 'new-service'
+        $query = "UPDATE `temp_service_sheet` s
+                  LEFT JOIN services sv ON s.service_name = sv.item
+                  SET s.service_name = 'new-service'
+                  WHERE sv.item IS NULL";
+        $this->db->exec($query);
+    }
+
+    private function getTemporaryTableRowCount()
+    {
+        $query = "SELECT COUNT(*) FROM temp_service_sheet";
+        return $this->db->query($query)->fetchColumn();
+    }
+
+    private function getTotalAmountFromTemporaryTable()
+    {
+        $query = "SELECT SUM(amount) FROM temp_service_sheet";
+        return $this->db->query($query)->fetchColumn();
     }
 
     private function parseDate($dateValue)
@@ -286,7 +360,6 @@ class ExcelController
     {
         return floatval(str_replace(',', '', $amount));
     }
-
 
     private function logError($message)
     {

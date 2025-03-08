@@ -222,7 +222,7 @@
                                             if (data.success) {
                                                 Swal.fire({
                                                     title: 'Success',
-                                                    text: data.message,
+                                                    text: `${data.message}`,
                                                     icon: 'success',
                                                     showCancelButton: true,
                                                     confirmButtonText: 'Proceed to Insert',
@@ -264,7 +264,7 @@
                                     if (data.success) {
                                         Swal.fire({
                                             title: 'Success',
-                                            text: data.message,
+                                            text: `${data.message}`,
                                             icon: 'success',
                                             showCancelButton: true,
                                             confirmButtonText: 'Proceed to Insert',
@@ -316,11 +316,11 @@
                         });
                         startStatusCheck(jobId);
                     } else {
-                        Swal.fire('Error', 'Processing failed.', 'error');
+                        Swal.fire('Error', 'Processing failed: ' + getFriendlyErrorMessage(data.message), 'error');
                     }
                 }).catch(err => {
                     console.error('Processing Error:', err);
-                    Swal.fire('Error', 'An error occurred during processing.', 'error');
+                    Swal.fire('Error', 'An error occurred during processing: ' + getFriendlyErrorMessage(err.message), 'error');
                 });
         }
 
@@ -350,16 +350,78 @@
                     if (data.status === 'Completed' || data.status === 'Error') {
                         clearInterval(intervalId);
                         Swal.close();
-                        Swal.fire({
-                            title: data.status === 'Completed' ? 'Success' : 'Error',
-                            text: `${data.message} File: ${data.file}`,
-                            icon: data.status === 'Completed' ? 'success' : 'error'
-                        });
+                        if (data.status === 'Error') {
+                            let errorMessage = formatErrorMessage(data.message, data.invalidStylists, data.invalidServices);
+                            Swal.fire({
+                                title: 'Error',
+                                html: errorMessage,
+                                icon: 'error'
+                            });
+                        } else {
+                            // Format totalAmount with commas for thousands separators
+                            const formattedTotalAmount = Number(data.totalAmount).toLocaleString('en-US');
+                            Swal.fire({
+                                title: 'Success',
+                                text: `${data.rowsInserted} transactions worth KES ${formattedTotalAmount} uploaded successfully.`,
+                                icon: 'success'
+                            });
+                        }
                         resetUploadState();
                     }
                 })
-                .catch(error => console.error('Error:', error));
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire('Error', 'An error occurred while checking the status: ' + getFriendlyErrorMessage(error.message), 'error');
+                    clearInterval(intervalId);
+                    resetUploadState();
+                });
             }, 5000);
+        }
+
+        // Function to convert technical error messages to user-friendly messages
+        function getFriendlyErrorMessage(message) {
+            if (message.includes('Base table or view not found')) {
+                return 'A required database table is missing. Please contact support.';
+            }
+            if (message.includes('Invalid date format')) {
+                return 'The file contains an invalid date format. Please check the date format on the excel file and try again.';
+            }
+            if (message.includes('Missing required fields')) {
+                return 'The file is missing some required fields. Please check the file and try again.';
+            }
+            if (message.includes('Duplicate receipt numbers found')) {
+                return 'The file contains duplicate receipt numbers. Please check the file and try again.';
+            }
+            if (message.includes('Invalid stylists found')) {
+                return 'The file contains invalid stylists. Please add these stylists to the database and then try again.';
+            }
+            if (message.includes('Invalid services found')) {
+                return 'The file contains invalid services. Please add these services to the database and try again.';
+            }
+            return message; // Default to the original message if no specific handling is defined
+        }
+
+        // Function to format error messages with suggestions
+        function formatErrorMessage(message, invalidStylists = [], invalidServices = []) {
+            let formattedMessage = message;
+
+            if (invalidStylists.length > 0) {
+                formattedMessage += `
+                    <p>The following stylists are missing in the database:</p>
+                    <ul>${invalidStylists.map(stylist => `<li>${stylist}</li>`).join('')}</ul>
+                    <p>Please add these stylists to the database and try again.</p>
+                `;
+            }
+
+            if (invalidServices.length > 0) {
+                formattedMessage += `
+                    <p>The following services are missing in the database:</p>
+                    <ul>${invalidServices.map(service => `<li>${service}</li>`).join('')}</ul>
+                    <p>Please add these services to the database and try again.</p>
+                `;
+            }
+
+            return formattedMessage;
         }
 
     </script>

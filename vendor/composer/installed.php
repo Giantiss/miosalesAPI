@@ -3,7 +3,7 @@
         'name' => 'nomad/php-excel-api',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => '5f3f2e01ed1fe70031b0732ac3d7264347347c9d',
+        'reference' => '0cf97ddff4b13e547a318c2431888e3b79eb0d6a',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -85,7 +85,7 @@
         'nomad/php-excel-api' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => '5f3f2e01ed1fe70031b0732ac3d7264347347c9d',
+            'reference' => '0cf97ddff4b13e547a318c2431888e3b79eb0d6a',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
