@@ -56,6 +56,9 @@ class ExcelController
         $totalRows = 0;
         $progressId = 0;
 
+        // Generate a unique upload ID
+        $uploadId = uniqid();
+
         // Check if file exists
         if (!file_exists($filePath)) {
             $response['message'] = 'File not found.';
@@ -93,8 +96,8 @@ class ExcelController
             $rowsInserted = 0;
             $batchData = [];
 
-            // Create a temporary table
-            $this->createTemporaryTable();
+            // Create the table if it doesn't exist
+            $this->createTable();
 
             foreach ($sheetData as $rowIndex => $row) {
                 if ($rowIndex === 1) {
@@ -131,8 +134,9 @@ class ExcelController
                     return $response;
                 }
 
-                // Prepare data for insertion into temporary table
+                // Prepare data for insertion into the table
                 $rowData = [
+                    'upload_id' => $uploadId,
                     'entry_date' => $entry_date,
                     'reciept_no' => $reciept_no,
                     'stylist_name' => $stylist_name,
@@ -146,34 +150,40 @@ class ExcelController
 
                 // Insert batch if batch size is reached
                 if (count($batchData) >= $batchSize) {
-                    $this->insertTemporaryBatch($batchData);
+                    $this->insertBatch($batchData);
                     $batchData = []; // Reset batch data
                 }
             }
 
             // Insert any remaining rows in the batch
             if (!empty($batchData)) {
-                $this->insertTemporaryBatch($batchData);
+                $this->insertBatch($batchData);
             }
 
             // Check for duplicate receipt numbers using MySQL joins
-            $duplicateReceipts = $this->checkDuplicateReceipts();
+            $duplicateReceipts = $this->checkDuplicateReceipts($uploadId);
             if (!empty($duplicateReceipts)) {
-                $response['message'] = 'Duplicate receipt numbers found: ' . implode(', ', (array)$duplicateReceipts);
+                // Delete records from service_sheet_uploads
+                $this->deleteUploadRecords($uploadId);
+                $response['message'] = count($duplicateReceipts) . ' Duplicate Receipt Numbers Found. Please Review The file And Try Again.';
                 return $response;
             }
 
             // Validate stylists and services using MySQL joins
-            $invalidStylists = $this->checkInvalidStylists();
+            $invalidStylists = $this->checkInvalidStylists($uploadId);
             if (!empty($invalidStylists)) {
+                // Delete records from service_sheet_uploads
+                $this->deleteUploadRecords($uploadId);
                 $response['message'] = 'Invalid stylists found: ' . implode(', ', $invalidStylists) . '. Please add these stylists to the database and try again.';
                 $response['invalidStylists'] = $invalidStylists;
                 $response['invalidStylistsCount'] = count($invalidStylists);
                 return $response;
             }
 
-            $invalidServices = $this->checkInvalidServices();
+            $invalidServices = $this->checkInvalidServices($uploadId);
             if (!empty($invalidServices)) {
+                // Delete records from service_sheet_uploads
+                $this->deleteUploadRecords($uploadId);
                 $response['message'] = 'Invalid services found: ' . implode(', ', $invalidServices) . '. Please add these services to the database and try again.';
                 $response['invalidServices'] = $invalidServices;
                 $response['invalidServicesCount'] = count($invalidServices);
@@ -181,12 +191,12 @@ class ExcelController
             }
 
             // Update invalid services to 'new-service'
-            $this->updateInvalidServices();
+            $this->updateInvalidServices($uploadId);
 
-            // Insert data from temporary table to service_sheet table
-            $this->insertFromTemporaryTable();
-            $rowsInserted = $this->getTemporaryTableRowCount();
-            $totalAmount = $this->getTotalAmountFromTemporaryTable();
+            // Insert data from the table to service_sheet table
+            $this->insertFromTable($uploadId);
+            $rowsInserted = $this->getTableRowCount($uploadId);
+            $totalAmount = $this->getTotalAmountFromTable($uploadId);
 
             $response = [
                 'status' => 'success',
@@ -206,9 +216,10 @@ class ExcelController
         return $response;
     }
 
-    private function createTemporaryTable()
+    private function createTable()
     {
-        $query = "CREATE TEMPORARY TABLE temp_service_sheet (
+        $query = "CREATE TABLE IF NOT EXISTS service_sheet_uploads (
+            upload_id VARCHAR(255),
             entry_date DATE,
             reciept_no VARCHAR(255),
             stylist_name VARCHAR(255),
@@ -219,7 +230,7 @@ class ExcelController
         $this->db->exec($query);
     }
 
-    private function insertTemporaryBatch($batchData)
+    private function insertBatch($batchData)
     {
         try {
             // Ensure $batchData is valid
@@ -231,15 +242,15 @@ class ExcelController
             log_message('Batch size: ' . count($batchData));
             $startTime = microtime(true);
 
-
             // Prepare the query with placeholders for multiple rows
-            $query = "INSERT INTO temp_service_sheet (entry_date, reciept_no, stylist_name, service_name, amount, net) VALUES ";
+            $query = "INSERT INTO service_sheet_uploads (upload_id, entry_date, reciept_no, stylist_name, service_name, amount, net) VALUES ";
             $placeholders = [];
             $params = [];
 
             foreach ($batchData as $rowData) {
-                $placeholders[] = "(?, ?, ?, ?, ?, ?)";
+                $placeholders[] = "(?, ?, ?, ?, ?, ?, ?)";
                 $params = array_merge($params, [
+                    $rowData['upload_id'],
                     $rowData['entry_date'],
                     $rowData['reciept_no'],
                     $rowData['stylist_name'],
@@ -271,64 +282,75 @@ class ExcelController
         }
     }
 
-    private function checkDuplicateReceipts()
+    private function checkDuplicateReceipts($uploadId)
     {
-        $query = "SELECT temp_service_sheet.reciept_no FROM temp_service_sheet
-                  JOIN service_sheet ON temp_service_sheet.reciept_no = service_sheet.reciept_no";
-        $stmt = $this->db->query($query);
+        $query = "SELECT DISTINCT service_sheet_uploads.reciept_no FROM service_sheet_uploads
+                  JOIN service_sheet ON service_sheet_uploads.reciept_no = service_sheet.reciept_no
+                  WHERE service_sheet_uploads.upload_id = ?";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([$uploadId]);
         return $stmt->fetchAll(PDO::FETCH_COLUMN);
     }
 
-    private function checkInvalidStylists()
+    private function checkInvalidStylists($uploadId)
     {
-        $query = "SELECT DISTINCT stylist_name FROM temp_service_sheet
-                  LEFT JOIN stylists ON LOWER(temp_service_sheet.stylist_name) = LOWER(stylists.name)
-                  WHERE stylists.id IS NULL";
-        $stmt = $this->db->query($query);
+        $query = "SELECT DISTINCT stylist_name FROM service_sheet_uploads
+                  LEFT JOIN stylists ON LOWER(service_sheet_uploads.stylist_name) = LOWER(stylists.name)
+                  WHERE stylists.id IS NULL AND service_sheet_uploads.upload_id = ?";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([$uploadId]);
         return $stmt->fetchAll(PDO::FETCH_COLUMN);
     }
 
-    private function checkInvalidServices()
+    private function checkInvalidServices($uploadId)
     {
-        $query = "SELECT DISTINCT service_name FROM temp_service_sheet
-                  LEFT JOIN services ON LOWER(temp_service_sheet.service_name) = LOWER(services.item)
-                  WHERE services.id IS NULL";
-        $stmt = $this->db->query($query);
+        $query = "SELECT DISTINCT service_name FROM service_sheet_uploads
+                  LEFT JOIN services ON LOWER(service_sheet_uploads.service_name) = LOWER(services.item)
+                  WHERE services.id IS NULL AND service_sheet_uploads.upload_id = ?";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([$uploadId]);
         return $stmt->fetchAll(PDO::FETCH_COLUMN);
     }
 
-    private function insertFromTemporaryTable()
+    private function insertFromTable($uploadId)
     {
-        // Insert data from the temporary table into the service_sheet table
+        // Insert data from the uploads table into the service_sheet table
         $query = "INSERT INTO service_sheet
                   (`entryId`, `entry_date`, `stylist`, `service`, `amount`, `net`, `reciept_no`)
                   SELECT null, `entry_date`, st.id, sv.id, `amount`, `net`, `reciept_no`
-                  FROM `temp_service_sheet` s
+                  FROM `service_sheet_uploads` s
                   INNER JOIN stylists st ON st.name = s.stylist_name
-                  INNER JOIN services sv ON s.service_name = sv.item";
-        $this->db->exec($query);
+                  INNER JOIN services sv ON s.service_name = sv.item
+                  WHERE s.upload_id = ?";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([$uploadId]);
     }
 
-    private function updateInvalidServices()
+    private function updateInvalidServices($uploadId)
     {
         // Update invalid services to 'new-service'
-        $query = "UPDATE `temp_service_sheet` s
+        $query = "UPDATE `service_sheet_uploads` s
                   LEFT JOIN services sv ON s.service_name = sv.item
                   SET s.service_name = 'new-service'
-                  WHERE sv.item IS NULL";
-        $this->db->exec($query);
+                  WHERE sv.item IS NULL AND s.upload_id = ?";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([$uploadId]);
     }
 
-    private function getTemporaryTableRowCount()
+    private function getTableRowCount($uploadId)
     {
-        $query = "SELECT COUNT(*) FROM temp_service_sheet";
-        return $this->db->query($query)->fetchColumn();
+        $query = "SELECT COUNT(*) FROM service_sheet_uploads WHERE upload_id = ?";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([$uploadId]);
+        return $stmt->fetchColumn();
     }
 
-    private function getTotalAmountFromTemporaryTable()
+    private function getTotalAmountFromTable($uploadId)
     {
-        $query = "SELECT SUM(amount) FROM temp_service_sheet";
-        return $this->db->query($query)->fetchColumn();
+        $query = "SELECT SUM(amount) FROM service_sheet_uploads WHERE upload_id = ?";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([$uploadId]);
+        return $stmt->fetchColumn();
     }
 
     private function parseDate($dateValue)
@@ -364,5 +386,12 @@ class ExcelController
     private function logError($message)
     {
         error_log($message, 3, __DIR__ . '/../../logs/debug.log');
+    }
+
+    private function deleteUploadRecords($uploadId)
+    {
+        $query = "DELETE FROM service_sheet_uploads WHERE upload_id = ?";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([$uploadId]);
     }
 }

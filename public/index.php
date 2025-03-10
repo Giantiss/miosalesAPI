@@ -113,11 +113,28 @@ if ($requestMethod === 'POST' && isset($pathInfo[0])) {
                     exit();
                 }
 
-                // Save the uploaded file
+                // Save the uploaded file temporarily
                 $savedFileName = time() . '_' . $fileName;
-                $destination = $uploadDir . $savedFileName;
+                $tempDestination = $uploadDir . 'temp_' . $savedFileName;
 
-                if (move_uploaded_file($fileTmpName, $destination)) {
+                if (move_uploaded_file($fileTmpName, $tempDestination)) {
+                    // Process the file to check for duplicates
+                    $result = $controller->importExcel($tempDestination);
+
+                    if ($result['status'] === 'error') {
+                        // Delete the temporary file
+                        unlink($tempDestination);
+                        http_response_code(400);
+                        header('Content-Type: application/json');
+                        echo json_encode(['error' => $result['message']]);
+                        log_message('File processing error: ' . $result['message']);
+                        exit();
+                    }
+
+                    // Move the processed file to the uploads directory
+                    $finalDestination = $uploadDir . $savedFileName;
+                    rename($tempDestination, $finalDestination);
+
                     // Add the job to the queue
                     $jobFilePath = $uploadDir . 'jobs.json';
                     $jobs = file_exists($jobFilePath) ? json_decode(file_get_contents($jobFilePath), true) : [];
