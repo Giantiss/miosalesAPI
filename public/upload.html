@@ -186,7 +186,7 @@
                 cancelBtn.disabled = false;
 
                 // Check for duplicates with the hash
-                fetch('/check-duplicate', {
+                fetch('/fresha/public/index.php/check-duplicate', {
                     method: 'POST',
                     headers: {
                         'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4',
@@ -211,7 +211,7 @@
                                     formData.append('file', selectedFile);
                                     formData.append('allowDuplicate', 'true'); // Add flag here
 
-                                    fetch('/upload', {
+                                    fetch('/fresha/public/index.php/upload', {
                                         headers: {
                                             'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4'
                                         },
@@ -253,7 +253,7 @@
                             const formData = new FormData();
                             formData.append('file', selectedFile);
 
-                            fetch('/upload', {
+                            fetch('/fresha/public/index.php/upload', {
                                 headers: {
                                     'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4'
                                 },
@@ -296,7 +296,7 @@
 
         // Function to start processing
         function startProcessing(jobId) {
-            fetch('/start-processing', {
+            fetch('/fresha/public/index.php/start-processing', {
                 method: 'POST',
                 headers: {
                     'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4',
@@ -337,7 +337,7 @@
 
         function startStatusCheck(jobId) {
             const intervalId = setInterval(() => {
-                fetch('/check-status', {
+                fetch('/fresha/public/index.php/check-status', {
                     method: 'POST',
                     headers: {
                         'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4',

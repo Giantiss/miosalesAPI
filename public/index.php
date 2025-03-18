@@ -3,6 +3,9 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+error_reporting(E_ALL);
 
 require_once '../vendor/autoload.php';
 require_once __DIR__ . '/../src/Api/log_helper.php';
@@ -65,7 +68,7 @@ if (!is_dir($uploadDir)) {
 
 // Route Handling
 if ($requestMethod === 'POST' && isset($pathInfo[0])) {
-    switch ($pathInfo[0]) {
+    switch ($pathInfo[3]) {
         case 'upload':
             if (isset($_FILES['file'])) {
                 $file = $_FILES['file'];
