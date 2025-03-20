@@ -93,7 +93,6 @@
         .success-message {
             color: green;
         }
-
     </style>
 </head>
 
@@ -235,8 +234,12 @@
                                                     }
                                                 });
                                             } else {
-                                                Swal.fire('Error', 'Upload failed.', 'error');
-                                                uploadBtn.textContent = 'Upload was not completed';
+                                                Swal.fire({
+                                                    title: 'Error',
+                                                    text: data.error || 'Upload failed.',
+                                                    icon: 'error'
+                                                });
+                                                resetUploadState();
                                             }
                                         }).catch(err => {
                                             console.error('Upload Error:', err);
@@ -277,8 +280,12 @@
                                             }
                                         });
                                     } else {
-                                        Swal.fire('Error', 'Upload failed.', 'error');
-                                        uploadBtn.textContent = 'Upload was not completed';
+                                        Swal.fire({
+                                            title: 'Error',
+                                            text: data.error || 'Upload failed.',
+                                            icon: 'error'
+                                        });
+                                        resetUploadState();
                                     }
                                 }).catch(err => {
                                     console.error('Upload Error:', err);
@@ -305,22 +312,23 @@
                 body: JSON.stringify({ jobId: jobId })
             }).then(response => response.json())
                 .then(data => {
-                    if (data.success) {
+                    if (data.status === 'success') { // Changed from data.success to data.status
+                        const formattedTotalAmount = Number(data.totalAmount).toLocaleString('en-US');
                         Swal.fire({
-                            title: 'Processing...',
-                            text: 'Please wait while the file is being processed.',
-                            allowOutsideClick: false,
-                            didOpen: () => {
-                                Swal.showLoading();
-                            }
+                            title: 'Success',
+                            text: `${data.rowsInserted} transactions worth KES ${formattedTotalAmount} uploaded successfully.`,
+                            icon: 'success'
+                        }).then(() => {
+                            resetUploadState(); // Reset the form after showing success message
                         });
-                        startStatusCheck(jobId);
                     } else {
-                        Swal.fire('Error', 'Processing failed: ' + getFriendlyErrorMessage(data.message), 'error');
+                        const errorMessage = data.error || data.message || 'Unknown error occurred';
+                        throw new Error(errorMessage); // Throw error to be caught by catch block
                     }
                 }).catch(err => {
                     console.error('Processing Error:', err);
-                    Swal.fire('Error', 'An error occurred during processing: ' + getFriendlyErrorMessage(err.message), 'error');
+                    Swal.fire('Error', getFriendlyErrorMessage(err.message), 'error');
+                    resetUploadState();
                 });
         }
 
@@ -335,51 +343,13 @@
             cancelBtn.disabled = true;
         }
 
-        function startStatusCheck(jobId) {
-            const intervalId = setInterval(() => {
-                fetch('/fresha/public/index.php/check-status', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImV3YW5qYXUiLCJwYXNzd29yZCI6IjIzNCIsImlhdCI6MTY4OTQ2NTQ0OSwiZXhwIjoxNjg5NDY5MDQ5fQ.SJF7Ieq2Gc5hz5dWyb5vcOAsBdG04Z6eU2zGTtHOCa4',
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ jobId: jobId })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'Completed' || data.status === 'Error') {
-                        clearInterval(intervalId);
-                        Swal.close();
-                        if (data.status === 'Error') {
-                            let errorMessage = formatErrorMessage(data.message, data.invalidStylists, data.invalidServices);
-                            Swal.fire({
-                                title: 'Error',
-                                html: errorMessage,
-                                icon: 'error'
-                            });
-                        } else {
-                            // Format totalAmount with commas for thousands separators
-                            const formattedTotalAmount = Number(data.totalAmount).toLocaleString('en-US');
-                            Swal.fire({
-                                title: 'Success',
-                                text: `${data.rowsInserted} transactions worth KES ${formattedTotalAmount} uploaded successfully.`,
-                                icon: 'success'
-                            });
-                        }
-                        resetUploadState();
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    Swal.fire('Error', 'An error occurred while checking the status: ' + getFriendlyErrorMessage(error.message), 'error');
-                    clearInterval(intervalId);
-                    resetUploadState();
-                });
-            }, 5000);
-        }
-
         // Function to convert technical error messages to user-friendly messages
         function getFriendlyErrorMessage(message) {
+            if (!message) return 'An unknown error occurred';
+
+            if (message.includes('Validation data not found')) {
+                return 'The validation data was not found. Please try uploading the file again.';
+            }
             if (message.includes('Base table or view not found')) {
                 return 'A required database table is missing. Please contact support.';
             }
@@ -390,10 +360,10 @@
                 return 'The file is missing some required fields. Please check the file and try again.';
             }
             if (message.includes('Duplicate receipt numbers found')) {
-                return 'The file contains duplicate receipt numbers. Please check the file and try again.';
+                return message; // Use the detailed message directly
             }
             if (message.includes('Invalid stylists found')) {
-                return 'The file contains invalid stylists. Please add these stylists to the database and then try again.';
+                return message; // Use the detailed message directly;
             }
             if (message.includes('Invalid services found')) {
                 return 'The file contains invalid services. Please add these services to the database and try again.';

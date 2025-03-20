@@ -62,84 +62,100 @@ class FileProcessor {
 
         log_message('FileProcessor: Started processing script for job ID: ' . $this->jobId);
 
-        // Initialize status
-        $status = ['status' => 'Processing', 'message' => '', 'file' => ''];
-
-        // Write initial status
-        file_put_contents($this->statusFile, json_encode($status));
-        log_message('FileProcessor: Initial status written to ' . $this->statusFile);
-
-        // Get all Excel files in the upload directory
-        $allowedExtensions = ['xlsx', 'xls'];
-        $files = array_filter(scandir($this->uploadDir), function ($file) use ($allowedExtensions) {
-            $filePath = $this->uploadDir . $file;
-            $fileExtension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
-            return is_file($filePath) && in_array($fileExtension, $allowedExtensions);
-        });
-
-        if (empty($files)) {
-            log_message('FileProcessor: No new files to process.');
-            $status['status'] = 'No files';
-            $status['message'] = 'No new files to process.';
-            file_put_contents($this->statusFile, json_encode($status));
-            log_message('FileProcessor: Status updated to "No files"');
-            exit("No new files to process.");
-        }
-
-        log_message('FileProcessor: Found files to process: ' . implode(', ', $files));
-
-        // Process each file
-        foreach ($files as $file) {
-            $filePath = $this->uploadDir . $file;
-            log_message('FileProcessor: Processing file: ' . $filePath);
-
-            try {
-                // Call the importExcel method to process the file in batches
-                $result = $this->controller->importExcel($filePath, $this->batchSize);
-
-                // Log the result of the processing
-                log_message('FileProcessor: File processing result: ' . print_r($result, true));
-
-                if ($result['status'] === 'error') {
-                    throw new Exception($result['message']);
+        try {
+            // Get the job details
+            $jobs = json_decode(file_get_contents($this->jobFilePath), true);
+            $currentJob = null;
+            foreach ($jobs as $job) {
+                if ($job['id'] === $this->jobId) {
+                    $currentJob = $job;
+                    break;
                 }
+            }
 
-                // Move the processed file to the processed directory
-                $newLocation = $this->processedDir . $file;
-                if (rename($filePath, $newLocation)) {
-                    log_message('FileProcessor: File moved to: ' . $newLocation);
-                } else {
-                    log_message('FileProcessor: Failed to move file: ' . $filePath);
-                }
+            if (!$currentJob || !isset($currentJob['upload_id'])) {
+                throw new Exception("Upload ID not found in job data");
+            }
 
-                // Update job file status on success
+            // Ensure the temp directory exists
+            $tempDir = __DIR__ . '/../../src/temp/';
+            if (!is_dir($tempDir)) {
+                mkdir($tempDir, 0777, true);
+            }
+
+            // Call the database insertion method with the upload_id from the job
+            $result = $this->controller->processValidatedData($currentJob['upload_id']);
+
+            if ($result['status'] === 'success') {
+                log_message("Processing succeeded with {$result['rowsInserted']} rows inserted");
+                // Update status on success, ensuring values are copied
+                $status = [
+                    'status' => 'Completed',
+                    'message' => 'File processing completed successfully.',
+                    'rowsInserted' => $result['rowsInserted'] ?? 0,
+                    'totalAmount' => $result['totalAmount'] ?? 0,
+                    'progress' => 100
+                ];
                 $this->updateJobStatus('processed');
 
-                // Update status on success
-                $status['status'] = 'Completed';
-                $status['message'] = 'File processing completed successfully.';
-                $status['file'] = $file;
-                $status['rowsInserted'] = $result['rowsInserted'];
-                $status['totalAmount'] = $result['totalAmount'];
-                file_put_contents($this->statusFile, json_encode($status));
-                log_message('FileProcessor: Status updated to "Completed"');
-            } catch (Exception $e) {
-                log_message('FileProcessor: Error processing file: ' . $filePath . ' - ' . $e->getMessage());
+                // Move file to processed directory
+                if (isset($currentJob['file']) && file_exists($this->uploadDir . $currentJob['file'])) {
+                    $sourceFile = $this->uploadDir . $currentJob['file'];
+                    $destFile = $this->processedDir . $currentJob['file'];
+                    
+                    if (rename($sourceFile, $destFile)) {
+                        log_message('FileProcessor: Moved file to processed directory: ' . $destFile);
+                    } else {
+                        log_message('FileProcessor: Failed to move file to processed directory: ' . $destFile);
+                    }
+                }
 
-                // Update job file status on error
+                // Log the final counts
+                log_message('FileProcessor: Completed processing with ' . 
+                    $result['rowsInserted'] . ' rows inserted, total amount: ' . 
+                    $result['totalAmount']);
+            } else {
+                log_message("Processing failed with error: " . $result['message']);
+                // Update status on error with more detail
+                $status = [
+                    'status' => 'Error',
+                    'message' => $result['message'],
+                    'progress' => 0,
+                    'rowsInserted' => 0,
+                    'totalAmount' => 0,
+                    'error_details' => isset($result['duplicates']) ? [
+                        'type' => 'duplicate_receipts',
+                        'count' => count($result['duplicates']),
+                        'samples' => array_slice($result['duplicates'], 0, 5)
+                    ] : null
+                ];
                 $this->updateJobStatus('error');
-
-                // Update status on error
-                $status['status'] = 'Error';
-                $status['message'] = 'Error processing file: ' . $e->getMessage();
-                $status['file'] = $file;
-                file_put_contents($this->statusFile, json_encode($status));
-                log_message('FileProcessor: Status updated to "Error"');
-                break; // Stop processing further files on error
+                
+                log_message('FileProcessor: Processing failed: ' . $result['message']);
+                if (isset($result['duplicates'])) {
+                    log_message('FileProcessor: Found ' . count($result['duplicates']) . ' duplicate receipts');
+                }
             }
+
+        } catch (Exception $e) {
+            $errorMsg = sprintf(
+                "Error processing file:\nMessage: %s\nFile: %s\nLine: %d\nTrace:\n%s",
+                $e->getMessage(),
+                $e->getFile(),
+                $e->getLine(),
+                $e->getTraceAsString()
+            );
+            log_message($errorMsg);
+            $status = [
+                'status' => 'Error',
+                'message' => $e->getMessage(),
+                'progress' => 0
+            ];
+            $this->updateJobStatus('error');
         }
 
-        log_message('FileProcessor: Finished processing.');
+        file_put_contents($this->statusFile, json_encode($status));
+        log_message('FileProcessor: Finished with status: ' . $status['status']);
     }
 
     private function updateJobStatus($status) {

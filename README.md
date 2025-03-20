@@ -142,4 +142,7 @@ All file upload activities and errors are logged using Monolog. This includes th
     "error": "Detailed error message"
   }
   ```
+### DB changes
 
+ALTER TABLE `service_sheet` ADD INDEX(`reciept_no`); 
+ALTER TABLE `service_sheet_uploads` ADD INDEX(`reciept_no`); 
